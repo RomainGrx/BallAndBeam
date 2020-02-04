@@ -5,6 +5,8 @@
 @date : Tuesday, 04 February 2020
 """
 
+# Original code: https://github.com/jckantor/Ball-and-Beam
+
 from pylab import *
 import time
 from ipywidgets import interact, interactive
