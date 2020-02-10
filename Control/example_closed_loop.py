@@ -24,7 +24,7 @@ dt = 0.05
 # Note: etant donne qu'on travaille en temps discret (dt), la fonction de transfert provient de la
 # transformee en z du systeme discretise. Mais ca ne change rien en pratique car les coefficients
 # sont les memes que ceux de la transformee de Laplace du systeme non discretise.
-syst_open_tf = ct.tf(np.array([2]), np.array([5, 4, 3]), None)
+syst_open_tf = ct.tf(np.array([2]), np.array([5, 4, 3]), dt)
 syst_open_ss = ct.tf2ss(syst_open_tf)
 
 # Closed-loop: proof of concept avec un controleur PID discretise.
@@ -32,7 +32,7 @@ syst_open_ss = ct.tf2ss(syst_open_tf)
 # Note:
 #   - Un systeme trop "nerveux" <=> kp est trop grand (essayer en changeant kp!)
 #   - Trop de delai pour atteindre le setpoint <=> ki est trop petit
-#   - Effet de bord lors d'un changement de setpoin <=> ki est trop grand
+#   - Effet de bord lors d'un changement de setpoint <=> ki est trop grand
 kp = pow(10, -1)
 ki = pow(10, 1.5)
 kd = -pow(10, -2.5)
@@ -59,21 +59,19 @@ model = ct.feedback(ct.series(control_pid_ss, syst_open_ss), feedback_ss, sign=-
 # On transforme le modele en sa version "I/O" pour pouvoir lui donner des entrees et recuperer des sorties.
 model_io = ct.iosys.LinearIOSystem(model)
 
-# Analyse de la reponse du systeme a un sinus en entree pendant 100s.
+# Analyse de la reponse du systeme a un signal (sinus, carre, etc) en entree pendant 10s.
 t_in = np.arange(0, 10, dt)
 
 # y_sp est le "setpoint" = la valeur vers laquelle on veut amener la sortie y(t).
-# Ici, y_sp est constante, mais on peut aussi en faire une fonction y_sp(t).
-
 # Decommenter pour tester diverses fonctions de setpoint
-# y_sp = 0.42
+# y_sp = np.full(t_in.shape, 0.42)
 # y_sp = np.sin(t_in)
 y_sp = sig.square(t_in, duty=0.5)
 
 # On fourni le setpoint voulu en entree du systeme *global*
-# Attention, ceci est la commande du systeme en boucle fermee et pas du system en en boucle ouverte!
+# Attention, ceci est la commande du systeme en boucle fermee et pas du systeme en en boucle ouverte!
 # (celle du systeme en boucle ouverte est geree par le controleur et pas par nous)
-u_in = np.full(t_in.shape, y_sp)
+u_in = y_sp
 
 # On recupere le signal y(t) mesure et on affiche le tout.
 t_out, y = ct.input_output_response(model_io, T=t_in, U=u_in, squeeze=True)

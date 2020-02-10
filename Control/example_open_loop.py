@@ -23,7 +23,7 @@ syst_open_ss = ct.tf2ss(syst_open_tf)
 # Creation d'un objet input/output pour modeliser la boucle ouverte.
 syst_open_io = ct.iosys.LinearIOSystem(syst_open_ss)
 
-# Analyse de la reponse du systeme a un sinus en entree pendant 10s.
+# Analyse de la reponse du systeme a un signal en entree pendant 10s.
 t_in = np.arange(0, 10, dt)
 u_in = np.sin(t_in)
 t_out, y_open = ct.input_output_response(syst_open_io, T=t_in, U=u_in, squeeze=True)
