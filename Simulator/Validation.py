@@ -26,7 +26,7 @@ def command_limiter(low_bound, up_bound):
     return decorator
 
 
-@command_limiter(low_bound=-np.pi / 2, up_bound=np.pi / 2)
+@command_limiter(low_bound=np.deg2rad(-50), up_bound=np.deg2rad(50))
 def my_command(timestep, params, all_t, all_u, all_y, dt):
     return 0
 

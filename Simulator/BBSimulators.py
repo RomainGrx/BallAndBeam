@@ -1,38 +1,41 @@
 # -*- coding: utf-8 -*-
 
+# Author: Eduardo Vannini
+# Date: 22-02-2020
+
 import numpy as np
 import functools as ft
 from Simulator import Simulator
-
-# Author: Eduardo Vannini
-# Date: 22-02-2020
 
 
 class BBSimulator(Simulator):
     """
     Classe qui represente un simulateur "general" pour un systeme ball and beam decrit comme suit:
-        - Vecteur d'etat: [position, vitesse]
-        - Vecteur de commande: [angle]  (cet angle est encore assez abstrait pour cette classe)
-        - Vecteur de sortie: [position]
+        - Vecteur d'etat      : [position, vitesse]
+        - Vecteur de commande : [angle]  (cet angle est encore assez abstrait pour cette classe)
+        - Vecteur de sortie   : [position]
 
     On assigne aussi des valeurs a plusieurs parametres caracteristiques du systeme Ball and Beam du P4 MAP.
+    Note: La commande etant l'angle, on peut le faire varier de maniere instantanee avec ce simulateur.
+          Cependant, dans un systeme reel, il y a un delai du a l'inertie de la poutre, notamment.
+          Il faut garder cela en tete lors des tests et de la conception de la loi de commande.
     """
     def __init__(self, dt=0.05, buffer_size=100000):
         params = {
             "m": 55.9 / 1000,  # Masse de la bille [kg]
             "r": 30 / 1000,    # Rayon de la bille [m]
             "g": 9.81,         # Acceleration gravitationnelle a basse altitude [m/s^2]
-            "rho": 1000,       # Mase volumique de l'eau [kg/m^3]
-            "Cx": 0.47,        # Coefficient de frottement d'une sphere []
-            "L": 0.775,        # Longueur de la poutre [m]
+            "rho": 1000,       # Masse volumique de l'eau [kg/m^3]
+            "cx": 0.47,        # Coefficient de frottement d'une sphere []
+            "l": 0.775,        # Longueur de la poutre [m]
             "d": 55 / 1000,    # Longueur de la premiere barre attachee au servo [m]
         }
 
         # Coefficient tel que le frottement fluide soit: Ff = -kf * v (approximation) []
-        params["kf"] = 0.5 * params["rho"] * np.pi * params["r"]**2 * params["Cx"]
+        params["kf"] = 0.5 * params["rho"] * np.pi * params["r"]**2 * params["cx"]
 
-        params["Jb"] = 2/5 * params["m"] * params["r"]**2  # Moment d'inertie de la bille [kg*m^2]
-        params["V"] = 4/3 * np.pi * params["r"]**3         # Volume de la bille [m^3]
+        params["jb"] = 2/5 * params["m"] * params["r"]**2  # Moment d'inertie de la bille [kg*m^2]
+        params["v"] = 4/3 * np.pi * params["r"]**3         # Volume de la bille [m^3]
         n_states, n_commands, n_outputs = 2, 1, 1
         super().__init__(params, n_states, n_commands, n_outputs, dt, buffer_size)
 
@@ -51,9 +54,9 @@ class BBSimpleSimulator(BBSimulator):
 
     def dxdt(self):
         m, x, g, r = self.params["m"], self.all_x[self.timestep], self.params["g"], self.params["r"]
-        Jb, alpha, dalpha_dt = self.params["Jb"], self.all_u[self.timestep], self.dudt()
+        jb, alpha, dalpha_dt = self.params["jb"], self.all_u[self.timestep], self.dudt()
         dx1_dt = x[1]
-        dx2_dt = (m * x[0] * dalpha_dt**2 - m * g * np.sin(alpha)) / (Jb / r**2 + m)
+        dx2_dt = (m * x[0] * dalpha_dt**2 - m * g * np.sin(alpha)) / (jb / r**2 + m)
         return np.array([dx1_dt, dx2_dt])
 
 
@@ -70,22 +73,22 @@ class BBAlphaSimulator(BBSimulator):
 
     def dxdt(self):
         m, x, g, r = self.params["m"], self.all_x[self.timestep], self.params["g"], self.params["r"]
-        Jb, alpha, dalpha_dt = self.params["Jb"], self.all_u[self.timestep], self.dudt()
-        rho, V, kf = self.params["rho"], self.params["V"], self.params["kf"]
+        jb, alpha, dalpha_dt = self.params["jb"], self.all_u[self.timestep], self.dudt()
+        rho, v, kf = self.params["rho"], self.params["v"], self.params["kf"]
         dx1_dt = x[1]
-        dx2_dt = (m * x[0] * dalpha_dt**2 - m * g * np.sin(alpha) - (rho * V * g + kf) * x[1]) / (Jb / r**2 + m)
+        dx2_dt = (m * x[0] * dalpha_dt**2 - m * g * np.sin(alpha) - (rho * v * g + kf) * x[1]) / (jb / r**2 + m)
         return np.array([dx1_dt, dx2_dt])
 
     def update_state(self):
         # Ajout d'un mecanisme de "bridage" de la position: la balle est contrainte a rester dans le tube.
         new_x = self.all_x[self.timestep] + self.dt * self.dxdt()
-        if new_x[0] > self.params["L"] / 2:
+        if new_x[0] > self.params["l"] / 2:
             # Position imposee et vitesse mise a zero
-            self.all_x[self.timestep + 1, 0] = self.params["L"] / 2
+            self.all_x[self.timestep + 1, 0] = self.params["l"] / 2
             self.all_x[self.timestep + 1, 1] = 0
-        elif new_x[0] < -self.params["L"] / 2:
+        elif new_x[0] < -self.params["l"] / 2:
             # Position imposee et vitesse mise a zero
-            self.all_x[self.timestep + 1, 0] = -self.params["L"] / 2
+            self.all_x[self.timestep + 1, 0] = -self.params["l"] / 2
             self.all_x[self.timestep + 1, 1] = 0
         else:
             self.all_x[self.timestep + 1] = new_x
@@ -93,8 +96,8 @@ class BBAlphaSimulator(BBSimulator):
     def simulate(self, command_func, command_noise_func=lambda *args, **kwargs: 0,
                  output_noise_func=lambda *args, **kwargs: 0, n_steps=np.inf, init_state=0):
         # Ajout d'un mecanisme de verification de la validite de la position initiale.
-        if np.size(init_state) == 1 and np.abs(init_state) > self.params["L"] / 2 or\
-                np.size(init_state) == self.n_states and np.abs(init_state[0]) > self.params["L"] / 2:
+        if np.size(init_state) == 1 and np.abs(init_state) > self.params["l"] / 2 or\
+                np.size(init_state) == self.n_states and np.abs(init_state[0]) > self.params["l"] / 2:
             raise ValueError("Initial position is not on the beam")
         return super().simulate(command_func, command_noise_func, output_noise_func, n_steps, init_state)
 
@@ -105,13 +108,13 @@ class BBThetaSimulator(BBAlphaSimulator):
     """
     def dxdt(self):
         m, x, g, r = self.params["m"], self.all_x[self.timestep], self.params["g"], self.params["r"]
-        d, L, Jb = self.params["d"], self.params["L"], self.params["Jb"]
+        d, l, jb = self.params["d"], self.params["l"], self.params["jb"]
         theta, dtheta_dt = self.all_u[self.timestep], self.dudt()
-        alpha = np.arcsin(d / L * np.sin(theta))
-        dalpha_dt = d * np.cos(theta) * self.dudt() / (L * np.sqrt(1 - (d * np.sin(theta) / L)**2))
-        rho, V, kf = self.params["rho"], self.params["V"], self.params["kf"]
+        alpha = np.arcsin(d / l * np.sin(theta))
+        dalpha_dt = d * np.cos(theta) * self.dudt() / (l * np.sqrt(1 - (d * np.sin(theta) / l)**2))
+        rho, v, kf = self.params["rho"], self.params["v"], self.params["kf"]
         dx1_dt = x[1]
-        dx2_dt = (m * x[0] * dalpha_dt**2 - m * g * np.sin(alpha) - (rho * V * g + kf) * x[1]) / (Jb / r**2 + m)
+        dx2_dt = (m * x[0] * dalpha_dt**2 - m * g * np.sin(alpha) - (rho * v * g + kf) * x[1]) / (jb / r**2 + m)
         return np.array([dx1_dt, dx2_dt])
 
 
@@ -183,8 +186,8 @@ if __name__ == "__main__":
     fig, ((ax1), (ax2)) = plt.subplots(2, 1, sharex=True)
 
     ax1.plot(sim.all_t, sim.all_y, "k-", linewidth=2, label="Simulated position")
-    ax1.plot(sim.all_t, np.full(sim.all_t.shape, -sim.params["L"] / 2), "r--", label="Position bounds")
-    ax1.plot(sim.all_t, np.full(sim.all_t.shape, sim.params["L"] / 2), "r--")
+    ax1.plot(sim.all_t, np.full(sim.all_t.shape, -sim.params["l"] / 2), "r--", label="Position bounds")
+    ax1.plot(sim.all_t, np.full(sim.all_t.shape, sim.params["l"] / 2), "r--")
 
     ax2.plot(sim.all_t, np.rad2deg(sim.all_u), "k-", linewidth=2, label="Command")
     ax2.plot(sim.all_t, np.full(sim.all_t.shape, -50), "r--", label="Command bounds")

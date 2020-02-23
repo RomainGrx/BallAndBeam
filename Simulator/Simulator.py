@@ -4,11 +4,12 @@
 # Date: 22-02-2020
 
 import numpy as np
+import abc
 
 
-class Simulator:
+class Simulator(abc.ABC):
     """
-    Classe qui gere une simulation d'un systeme non-lineaire en temps discret (periode 'dt'):
+    Classe abstraite qui gere une simulation d'un systeme non-lineaire en temps discret (periode 'dt'):
         - Vecteur d'etat                    : x
         - Vecteur de commande               : u
         - Vecteur de sortie                 : y
@@ -60,6 +61,7 @@ class Simulator:
         self.all_y = np.zeros((self.buffer_size, self.n_outputs))
         self.all_y_noise = np.zeros((self.buffer_size, self.n_outputs))
 
+    @abc.abstractmethod
     def dxdt(self):
         """
         Implementation de la fonction 'f(x, u, vu)' pour calculer la derivee de l'etat au temps 'timestep' * 'dt'.
@@ -73,6 +75,7 @@ class Simulator:
         """
         raise NotImplementedError("Method 'dxdt' in class 'Simulator' must be overridden.")
 
+    @abc.abstractmethod
     def y(self):
         """
         Implementation de la fonction 'h(x, u, yu)' pour calculer la sortie du systeme au temps 'timestep' * 'dt'.
@@ -174,7 +177,7 @@ class Simulator:
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    # Exemple avec le systeme y = x et x = exp(-x)
+    # Exemple avec le systeme y = x et dx/dt = exp(-x)
     class ExpSimulator(Simulator):
         def __init__(self, dt=0.05, buffer_size=100000):
             n_states, n_commands, n_outputs = 1, 0, 1
@@ -185,6 +188,7 @@ if __name__ == "__main__":
 
         def y(self):
             return self.all_x[self.timestep]
+
 
     def my_command_func(timestep, params, all_t, all_u, all_y, dt):
         return np.zeros((0,))
