@@ -3,6 +3,7 @@
 # Author: Eduardo Vannini
 # Date: 22-02-2020
 
+import functools as ft
 import numpy as np
 import abc
 
@@ -26,6 +27,31 @@ class Simulator(abc.ABC):
     Cette classe n'est pas faite pour etre instanciee. Il faut en faire de l'heritage et implementer les
     methodes non implementees en fonction du modele que l'on veut simuler.
     """
+
+    @staticmethod
+    def command_limiter(low_bound, up_bound):
+        """
+        Decorateur pour des fonctions de commande. Il s'agit d'un limiteur qui permet de brider la sortie
+        de la fonction de commande decoree entre 'low_bound' et 'up_bound'. Ce decorateur ne fonctionne que
+        pour une commande scalaire (a.k.a. pas un vecteur).
+
+        :param low_bound : Borne reelle inferieure pour la commande.
+        :param up_bound  : Borne reelle superieure pour la commande.
+        :return          : Fonction de commande decoree bridee.
+        """
+        def decorator(command_func):
+            @ft.wraps(command_func)
+            def wrapper(*args, **kwargs):
+                raw_command = command_func(*args, **kwargs)
+                if raw_command < low_bound:
+                    return low_bound
+                elif raw_command > up_bound:
+                    return up_bound
+                else:
+                    return raw_command
+            return wrapper
+        return decorator
+
     def __init__(self, params, n_states, n_commands, n_outputs, dt=0.05, buffer_size=100000):
         """
         Initialisation du simulateur.

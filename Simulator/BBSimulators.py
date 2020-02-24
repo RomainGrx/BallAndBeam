@@ -4,7 +4,6 @@
 # Date: 22-02-2020
 
 import numpy as np
-import functools as ft
 from Simulator import Simulator
 
 
@@ -29,6 +28,7 @@ class BBSimulator(Simulator):
             "cx": 0.47,        # Coefficient de frottement d'une sphere []
             "l": 0.775,        # Longueur de la poutre [m]
             "d": 55 / 1000,    # Longueur de la premiere barre attachee au servo [m]
+            "b": 150 / 1000,   # Distance entre le pivot et le point d'attache du second bras du servo [m]
         }
 
         # Coefficient tel que le frottement fluide soit: Ff = -kf * v (approximation) []
@@ -108,9 +108,9 @@ class BBThetaSimulator(BBAlphaSimulator):
     """
     def dxdt(self):
         m, x, g, r = self.params["m"], self.all_x[self.timestep], self.params["g"], self.params["r"]
-        d, l, jb = self.params["d"], self.params["l"], self.params["jb"]
+        d, b, l, jb = self.params["d"], self.params["b"], self.params["l"], self.params["jb"]
         theta, dtheta_dt = self.all_u[self.timestep], self.dudt()
-        alpha = np.arcsin(d / l * np.sin(theta))
+        alpha = np.arcsin(d / b * np.sin(theta))
         dalpha_dt = d * np.cos(theta) * self.dudt() / (l * np.sqrt(1 - (d * np.sin(theta) / l)**2))
         rho, v, kf = self.params["rho"], self.params["v"], self.params["kf"]
         dx1_dt = x[1]
@@ -133,24 +133,9 @@ if __name__ == "__main__":
     # Puisque la vitesse depend de cette derivee, on observera un "catapultage" de la balle.
     # On observera ce catapultage uniquement si la balle est decentree, ce qui est coherent.
 
-    def command_limiter(low_bound, up_bound):
-        # Wrapper autour d'une fonction de commande pour en brider la sortie.
-        def decorator(command_func):
-            @ft.wraps(command_func)
-            def wrapper(*args, **kwargs):
-                raw_command = command_func(*args, **kwargs)
-                if raw_command < low_bound:
-                    return low_bound
-                elif raw_command > up_bound:
-                    return up_bound
-                else:
-                    return raw_command
-            return wrapper
-        return decorator
-
     # Fonction de commande dont la sortie est bridee entre -50deg et +50deg.
     # Decommenter les diverses lois de commande pour observer des comportements differents.
-    @command_limiter(low_bound=np.deg2rad(-50), up_bound=np.deg2rad(50))
+    @Simulator.command_limiter(low_bound=np.deg2rad(-50), up_bound=np.deg2rad(50))
     def my_command_func(timestep, params, all_t, all_u, all_y, dt):
         # Donnees utilisables jusqu'a l'indice [timestep - 1]
         t = timestep * dt

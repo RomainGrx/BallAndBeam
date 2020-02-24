@@ -4,29 +4,12 @@
 # Date: 22-02-2020
 
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import itertools as it
-import functools as ft
+from Simulator import Simulator
 from BBSimulators import BBSimpleSimulator, BBAlphaSimulator, BBThetaSimulator
 
 
-def command_limiter(low_bound, up_bound):
-    def decorator(command_func):
-        @ft.wraps(command_func)
-        def wrapper(*args, **kwargs):
-            raw_command = command_func(*args, **kwargs)
-            if raw_command < low_bound:
-                return low_bound
-            elif raw_command > up_bound:
-                return up_bound
-            else:
-                return raw_command
-        return wrapper
-    return decorator
-
-
-@command_limiter(low_bound=np.deg2rad(-50), up_bound=np.deg2rad(50))
+@Simulator.command_limiter(low_bound=np.deg2rad(-50), up_bound=np.deg2rad(50))
 def my_command(timestep, params, all_t, all_u, all_y, dt):
     return 0
 
