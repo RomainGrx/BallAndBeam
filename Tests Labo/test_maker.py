@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
+# Author: Eduardo Vannini
+# Date: 25-02-2020
+
 import numpy as np
-import pandas as pd
 import itertools as it
 import matplotlib.pyplot as plt
-import csv
-import io
 
 
 def write_theta(out_path, theta):
@@ -65,18 +65,18 @@ if __name__ == "__main__":
 
     # Angles limites: -50deg et +50deg (pour le servo)
 
-    # for angle_deg in range(-40, 40, 20):
-    #     write_test_1("./test_1_{}.txt".format(angle_deg), angle_deg, DT, T_MAX)
-    #
-    # for angle_deg_1, angle_deg_2 in it.product([-40, 0, 40], [-20, 0, 20]):
-    #     write_test_2("./test_2_{}_{}.txt".format(angle_deg_1, angle_deg_2), angle_deg_1, angle_deg_2, DT, T_MAX)
-    #
-    # for a, p in it.product([10, 20, 30, 40], [5, 10, 20]):
-    #     write_test_3("./test_3_{}_{}.txt".format(a, p), a, p, DT, T_MAX)
+    for angle_deg in range(-40, 40, 20):
+        write_test_1("./test_1_{}.txt".format(angle_deg), angle_deg, DT, T_MAX)
 
-    # for a1, a2, t1, t2 in [[-30, 30, 20, 5], [-30, 30, 20, 10], [-30, 30, 20, 20],
-    #                        [-40, 40, 20, 5], [-40, 40, 20, 10], [-40, 40, 20, 20]]:
-    #     write_test_4("./test_4_{}_{}_{}_{}.txt".format(a1, a2, t1, t2), a1, a2, t1, t2, DT, T_MAX)
+    for angle_deg_1, angle_deg_2 in it.product([-40, 0, 40], [-20, 0, 20]):
+        write_test_2("./test_2_{}_{}.txt".format(angle_deg_1, angle_deg_2), angle_deg_1, angle_deg_2, DT, T_MAX)
 
-    # plot_test("./test_4_-40_40_20_10.txt", DT, T_MAX)
-    # plt.show()
+    for a, p in it.product([10, 20, 30, 40], [5, 10, 20]):
+        write_test_3("./test_3_{}_{}.txt".format(a, p), a, p, DT, T_MAX)
+
+    for a1, a2, t1, t2 in [[-30, 30, 20, 5], [-30, 30, 20, 10], [-30, 30, 20, 20],
+                           [-40, 40, 20, 5], [-40, 40, 20, 10], [-40, 40, 20, 20]]:
+        write_test_4("./test_4_{}_{}_{}_{}.txt".format(a1, a2, t1, t2), a1, a2, t1, t2, DT, T_MAX)
+
+    plot_test("./test_4_-40_40_20_10.txt", DT, T_MAX)
+    plt.show()
