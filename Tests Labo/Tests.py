@@ -362,7 +362,7 @@ if __name__ == "__main__":
 
     # Dossier de base contenant tous les fichiers de donnees experimentales
     # (et rien d'autre, sinon probleme avec la fonction 'Tests.update_decimal_sep_dir').
-    expdata_dir = "./Tests Output/Data_Exp"
+    expdata_dir = "./Tests Output/"
 
     # Mettre a jour la representation des separateurs decimaux pour tous les fichiers
     # de donnees. Le changement sera applique a *tous* les fichiers contenus dans 'expdata_dir'.
