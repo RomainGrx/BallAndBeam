@@ -15,26 +15,34 @@ class BBSimulator(Simulator):
         - Vecteur de sortie   : [position]
 
     On assigne aussi des valeurs a plusieurs parametres caracteristiques du systeme Ball and Beam du P4 MAP.
+
     Note: La commande etant l'angle, on peut le faire varier de maniere instantanee avec ce simulateur.
-          Cependant, dans un systeme reel, il y a un delai du a l'inertie de la poutre, notamment.
+          Cependant, dans un systeme reel, il y a un leger delai du a l'inertie de la poutre, notamment.
           Il faut garder cela en tete lors des tests et de la conception de la loi de commande.
+
+    Note: Certains parametres du modele ont ete obtenus par optimisation experimentale et pourraient sembler
+          incoherents. Par exemple, le moment d'inertie de la bille ne semble pas dependre directement de la
+          masse de celle-ci, ou bien la masse de la bille est plus du double des 55.9g que fait la bille.
+          Cela s'explique par le fait que le modele ne tient pas compte de plusieurs phenomenes tels que
+          les turbulences de l'eau, l'inertie de la poutre, etc, et que tous ces phenomenes non pris en compte
+          se retrouvent pris en compte de maniere implicite dans la masse de la bille, son moment d'inertie, etc.
+          Par exemple, un parametre 'm' superieur a 55.9g traduit le fait qu'il y a une masse d'eau qui affecte
+          le deplacement de la bille, etc.
     """
     def __init__(self, dt=0.05, buffer_size=100000):
         params = {
-            "m": 55.9 / 1000,  # Masse de la bille [kg]
-            "r": 30 / 1000,    # Rayon de la bille [m]
-            "g": 9.81,         # Acceleration gravitationnelle a basse altitude [m/s^2]
-            "rho": 1000,       # Masse volumique de l'eau [kg/m^3]
-            "cx": 0.47,        # Coefficient de frottement d'une sphere []
-            "l": 0.775,        # Longueur de la poutre [m]
-            "d": 55 / 1000,    # Longueur de la premiere barre attachee au servo [m]
-            "b": 150 / 1000,   # Distance entre le pivot et le point d'attache du second bras du servo [m]
+            "m": 1.39728756e-01,   # Masse de la bille [kg]
+            "r": 30 / 1000,        # Rayon de la bille [m]
+            "g": 9.81,             # Acceleration gravitationnelle a basse altitude [m/s^2]
+            "rho": 1000,           # Masse volumique de l'eau [kg/m^3]
+            "cx": 0.47,            # Coefficient de frottement d'une sphere []
+            "l": 0.775,            # Longueur de la poutre [m]
+            "d": 55 / 1000,        # Longueur de la premiere barre attachee au servo [m]
+            "b": 150 / 1000,       # Distance entre le pivot et le point d'attache du second bras du servo [m]
+            "kf": 1.63537967e+01,  # Coefficient de frottement obtenu par optimisation experimentale []
+            "jb": 8.29530009e-04,  # Moment d'inertie de la bille obtenu par optimisation experimentale [kg*m^2]
         }
 
-        # Coefficient tel que le frottement fluide soit: Ff = -kf * v (approximation) []
-        params["kf"] = 0.5 * params["rho"] * np.pi * params["r"]**2 * params["cx"]
-
-        params["jb"] = 2/5 * params["m"] * params["r"]**2  # Moment d'inertie de la bille [kg*m^2]
         params["v"] = 4/3 * np.pi * params["r"]**3         # Volume de la bille [m^3]
         n_states, n_commands, n_outputs = 2, 1, 1
         super().__init__(params, n_states, n_commands, n_outputs, dt, buffer_size)
@@ -94,7 +102,7 @@ class BBAlphaSimulator(BBSimulator):
             self.all_x[self.timestep + 1] = new_x
 
     def simulate(self, command_func, command_noise_func=lambda *args, **kwargs: 0,
-                 output_noise_func=lambda *args, **kwargs: 0, n_steps=np.inf, init_state=0):
+                 output_noise_func=lambda *args, **kwargs: 0, n_steps=np.inf, init_state=np.zeros((2,))):
         # Ajout d'un mecanisme de verification de la validite de la position initiale.
         if np.size(init_state) == 1 and np.abs(init_state) > self.params["l"] / 2 or\
                 np.size(init_state) == self.n_states and np.abs(init_state[0]) > self.params["l"] / 2:
@@ -104,18 +112,76 @@ class BBAlphaSimulator(BBSimulator):
 
 class BBThetaSimulator(BBAlphaSimulator):
     """
-    Meme chose que BBAlphaSimulator, mais ici c'est l'angle du servo (theta) qui sert de commande.
+    Sous-classe de BBAlphaSimulator. Changements par rapport a cette classe-la:
+        1) La commande se fait sur l'angle theta (servo) au lieu de l'angle alpha (poutre)
+
+        2) Il y a une gestion du decalage entre angle commande et angle obtenu que l'on peut observer en realite.
+           Ce decalage est modelise par un parametre constant 'theta_offset', tel que, quand on commande un angle
+           'theta', l'angle reel du servo est de 'theta' + 'theta_offset'. 'theta_offset' a une valeur d'environ
+           -6.17 deg par defaut, car c'est ce que l'on a pu observer en laboratoire et ce qui correspond le mieux
+           aux donnees experimentales.
+
+        3) Il y a une gestion du frottement statique. Elle est modelisee avec deux parametres 'stat_bound' et
+           'stat_spd_coeff', qui sont tels que la balle sera forcee a s'arreter quand la condition suivante est
+           verifiee:
+               abs('theta') + 'stat_spd_coeff' * abs('speed') < stat_bound
+           Ces parametres s'interpretent ainsi:
+               - Si la balle est a l'arret et que abs('theta') < 'stat_bound', alors la balle reste a l'arret;
+               - Si la valeur de 'stat_spd_coeff' est egale a 'stat_bound' / 'v', alors, a angle nul, la bille
+                 s'arretera quand la valeur absolue de sa vitesse est inferieure a 'v'.
+           Les valeurs par defaut de ces parametres sont obtenues de maniere experimentale:
+               - 'stat_bound' = -7deg;
+               - 'stat_spd_coeff' = 'stat_bound' / 0.05.  (0.05 correspond a des m/s)
+
+        4) Il y a une gestion de la non-linearite des forces de frottement par rapport a la norme de la vitesse.
+           On modelise cela avec un parametre 'ff_pow' dont la valeur par defaut est de 2.23113062e+00, suite a
+           une optimisation sur des donnees experimentales.
+
+        Note: certains de ces parametres en cachent d'autres. Il n'est pas anormal d'observer des forces de
+              de frottement super-quadratiques quand on sait que les phenomenes d'ecoulement turbulent (etc.) n'ont
+              pas ete rigoureusement modelises.
+
+        Note: L'offset est pris en compte dans 'all_u'.
     """
+
+    def __init__(self, dt=0.05, buffer_size=100000):
+        super().__init__(dt, buffer_size)
+        # Parametre pour la gestion de l'offset de l'angle
+        self.params["theta_offset"] = -1.07698393e-01  # Quand on commande theta = 0 deg, on aura theta = -6.17 deg
+
+        # Parametres pour la simulation du frottement statique
+        self.params["stat_bound"] = np.deg2rad(7)  # Vitesse nulle: la bille s'arrete quand abs(theta) < 7deg
+        self.params["stat_spd_coeff"] = self.params["stat_bound"] / 0.05  # A angle 0, la balle s'arrete si v < 0.05 m/s
+
+        # Parametre pour la gestion de la non-linearite du frottement par rapport a la vitesse
+        self.params["ff_pow"] = 2.23113062e+00  # Les frottements dependent de la vitesse**ff_pow
+
     def dxdt(self):
+        stat_bound, stat_spd_coeff = self.params["stat_bound"], self.params["stat_spd_coeff"]
         m, x, g, r = self.params["m"], self.all_x[self.timestep], self.params["g"], self.params["r"]
         d, b, l, jb = self.params["d"], self.params["b"], self.params["l"], self.params["jb"]
         theta, dtheta_dt = self.all_u[self.timestep], self.dudt()
         alpha = np.arcsin(d / b * np.sin(theta))
-        dalpha_dt = d * np.cos(theta) * self.dudt() / (l * np.sqrt(1 - (d * np.sin(theta) / l)**2))
-        rho, v, kf = self.params["rho"], self.params["v"], self.params["kf"]
+        dalpha_dt = d * np.cos(theta) * self.dudt() / (l * np.sqrt(1 - (d * np.sin(theta) / l) ** 2))
+        rho, v, kf, ff_pow = self.params["rho"], self.params["v"], self.params["kf"], self.params["ff_pow"]
+        x1_pow = np.power(np.abs(x[1]), ff_pow) * np.sign(x[1])  # Laisser le abs sinon racines complexes
         dx1_dt = x[1]
-        dx2_dt = (m * x[0] * dalpha_dt**2 - m * g * np.sin(alpha) - (rho * v * g + kf) * x[1]) / (jb / r**2 + m)
+        dx2_dt = (m * x[0] * dalpha_dt ** 2 - m * g * np.sin(alpha) - (rho * v * g + kf) * x1_pow) / (jb / r ** 2 + m)
+
+        # Gestion du frottement statique
+        if abs(theta) + stat_spd_coeff * abs(dx1_dt) < stat_bound:
+            dx1_dt = 0
+            dx2_dt = 0
+
         return np.array([dx1_dt, dx2_dt])
+
+    def simulate(self, command_func, command_noise_func=lambda *args, **kwargs: 0,
+                 output_noise_func=lambda *args, **kwargs: 0, n_steps=np.inf, init_state=np.zeros((2,))):
+        # Prise en compte de l'offset dans la commande. En faisant ainsi, l'offset ne sera pas pris en compte
+        # dans le bridage de la commande (e.g. une commande bridee entre 'low' et 'up' deviendra bridee
+        # entre 'low' + 'offset' et 'up' + 'offset')
+        return super().simulate(lambda *args, **kwargs: command_func(*args, **kwargs) + self.params["theta_offset"],
+                                command_noise_func, output_noise_func, n_steps, init_state)
 
 
 if __name__ == "__main__":
