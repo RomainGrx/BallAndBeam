@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 
+# Author: Eduardo Vannini
+# Date: 29-02-2020
+
 import numpy as np
 import scipy.optimize as opt
 import abc
