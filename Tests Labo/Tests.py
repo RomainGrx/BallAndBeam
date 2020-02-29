@@ -389,8 +389,8 @@ if __name__ == "__main__":
     # datafile = "test_4_-40_40_10_2_out_nul.txt"  # Ignorer ce test: trop bizarre
     # datafile = "test_4_-40_40_10_5_out.txt"
     # datafile = "test_4_-40_40_10_5_out_nul.txt"  # Ignorer ce test: trop bizarre
-    # datafile = "test_sinexp_1_out.txt"
-    datafile = "test_sinexp_5_out.txt"
+    datafile = "test_sinexp_1_out.txt"
+    # datafile = "test_sinexp_5_out.txt"
 
     # Affichage d'un graphe qui compare les vrais resultats experimentaux et les resultats de la
     # simulation pour le fichier 'datafile' choisi.
@@ -428,7 +428,7 @@ if __name__ == "__main__":
     # Lancement de l'optimisation (peut prendre un peu de temps).
     res = Tests.fit_bb_sim_params(training_data_paths, param_names, sim, bounds=bounds)
 
-    # Affichage de l'OptimizeResult retourne. Les valeurs optimales et la MSE correspondantes se trouvent
+    # Affichage de l'OptimizeResult retourne. Les valeurs optimales et la MSE correspondante se trouvent
     # ici. On retrouve aussi un status indiquant si l'optimisation a echoue ou non. Pour tester ces valeurs
     # il faut les remplacer a la main a l'endroit ci-dessus prevu a cet effet.
     print(res)
