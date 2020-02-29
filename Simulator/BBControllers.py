@@ -15,7 +15,7 @@ class BBController(abc.ABC):
     """
     def __init__(self, sim):
         """
-        Initialisation di controleur.
+        Initialisation du controleur.
 
         :param sim : Objet de type 'BBSimulator' qui simule le systeme.
         """
@@ -127,11 +127,11 @@ if __name__ == "__main__":
     from BBSimulators import BBThetaSimulator
 
     sim = BBThetaSimulator()
-    t = np.arange(0, 90, sim.dt)  # Simulation d'une minute
+    t = np.arange(0, 90, sim.dt)  # Simulation de 90s
     n_steps = t.size
 
     # setpoint = np.full(t.shape, 0.25)  # Setpoint constant: "maintenir la bille a une position fixee"
-    # setpoint = 0.15 * np.sin(2 * np.pi * t / 9)  # Setpoint = sinus de periode 12s et d'amplitude 0.15m
+    # setpoint = 0.15 * np.sin(2 * np.pi * t / 9)  # Setpoint = sinus de periode 9s et d'amplitude 0.15m
     setpoint = 0.15 * sig.square(2 * np.pi * t / 9)  # Setpoint = carre de periode 9s et d'amplitude 0.15m
 
     # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID sur la reference 'setpoint'
@@ -142,7 +142,7 @@ if __name__ == "__main__":
     # Valeurs de parametres PID obtenues par optimisation sur un signal carre de periode 9s
     cont = PIDBBController(sim, 11.83864757, -0.05425518,  3.83534646)
 
-    # Valeurs de parametres PID obtenues pour un setpoint constant a 0.25
+    # Valeurs de parametres PID obtenues pour un setpoint constant a 0.25m
     # cont = PIDBBController(sim, 13.36836963,  0.22281434,  4.79696383)
 
     cont.simulate(setpoint, n_steps=n_steps)
