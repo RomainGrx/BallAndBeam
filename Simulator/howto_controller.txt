@@ -1,0 +1,39 @@
+Comment faire un nouveau controleur?
+Il suffit de faire comme j'ai fait pour PIDBBController, c'est-a-dire:
+
+1) Faire une nouvelle classe qui herite de la classe 'BBController';
+2) Dans cette classe, reecrire la methode 'control_law' selon le mecanisme de controle que l'on veut implementer.
+
+Exemple: On aimerait implementer un controleur (tout pourri) qui retourne toujours un angle de 42deg. Pour faire ca,
+         on va creer la nouvelle classe 'StupidBBController' qui herite de 'BBController'. Puis, on va reecrire la
+         methode 'control_law' pour respecter la description qu'on vient de donner (aka: toujours avaoir angle=42deg):
+
+class StupidBBController(BBController):
+    @Simulator.command_limiter(low_bound=np.deg2rad(-50), up_bound=np.deg2rad(50))
+    def control_law(self, ref, pos, dt, u_1, flags_1):
+        return np.rad2deg(42)
+
+Note: on utilise le decorateur 'Simulator.command_limiter' pour s'assurer que la commande ne va pas plus loin que
+      -50deg et 50deg (limitation physiques du systeme reel).
+
+
+
+Comment utiliser ce super controleur qu'on vient de faire?
+Il faut d'abord creer le simulateur, on va prendre un 'BBThetaSimulator' parce que c'est celui qui est le plus complet.
+Il faut aussi creer le controleur, pour controler ce simulateur.
+Ensuite, il faut definir les points de reference que l'on veut donner a notre controleur. Ce sont les 'setpoint'.
+Finalement, lancer la methode 'simulate' du controleur.
+
+Exemple (suite de ci-dessus):
+
+sim = BBThetaSimulator()
+cont = StupidBBController()
+
+t = np.arange(0, 30, sim.dt)  # On simule 30s et on echantillonne avec la periode d'echantillonnage de 'sim'
+setpoint = np.sin(t)          # On essaye que la bille suive une trajectoire sinusoidale
+n_steps = t.size              # Nombre de pas de temps a simuler (traduit le fait qu'on veut simuler 30s)
+
+cont.simulate(setpoint, n_steps=n_steps)
+
+
+Ensuite, les valeurs utiles sont accessibles dans l'objet 'sim'. (e.g. la valeur de sortie est dans 'sim.all_y', etc.)
