@@ -33,7 +33,8 @@ class BBController(abc.ABC):
         parametres. Les 'flags' peuvent etre modifies.
 
         Note: Dans LabVIEW, certaines valeurs sont passees en centimetres, mais ici on travaille en metres.
-              Il suffira de faire la conversion au moment voulu.
+              Il suffira de faire la conversion au moment voulu. De meme, dans LabVIEW, on gere les angles
+              en degres, mais ici on les gere en radians.
 
         :param ref     : Valeur de reference visee en cet instant [m].
         :param pos     : Position actuelle de la bille [m].
@@ -80,6 +81,7 @@ class PIDBBController(BBController):
     def control_law(self, ref, pos, dt, u_1, flags_1):
         # Modifie self.flags et retourne u
         # Attention, dans LabVIEW ref est donne en cm, mais ici on le fait en m.
+        # De meme, les angles sont geres en degres dans LabVIEW et en radians ici.
         #
         # Integrale de l'erreur avec le flag #0
         # Memorisation de la position precedente avec le flag #1
