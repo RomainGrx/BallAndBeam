@@ -127,7 +127,7 @@ class Obj2PIDBBController(BBController):
         self.flags = flags_1
         if self.flags[0] == 0:
             self.flags[0] = 1
-            self.flags[1] = 200
+            self.flags[1] = 200  # On bypass le controle sur 200 iterations (10s)
 
         if self.flags[0] == 1 and self.flags[1] > 0:
             # Phase "d'initialisation"
@@ -216,11 +216,14 @@ if __name__ == "__main__":
     ax_pos.plot(t, setpoint, "ro--", linewidth=0.7, markersize=2, markevery=20, label="Setpoint [m]")
     ax_pos.plot(t, sim.all_y[:n_steps], "k-", label="Position [m]")
     ax_pos.plot(t, sim.all_y[:n_steps].flatten() - setpoint, "m--", linewidth=0.7, label="Error [m]")
-    ax_theta.plot(t, np.rad2deg(sim.all_u[:n_steps] - sim.params["theta_offset"]), "b--",
-                  linewidth=0.7, label="Commanded angle [deg]")
-    ax_theta.plot(t, np.rad2deg(sim.all_u[:n_steps]), "g-", label="Actual offset angle [deg]")
-    ax_theta.plot(t, np.full(t.shape, -50), "k--", linewidth=1, label="Commanded angle bounds [deg]")
-    ax_theta.plot(t, np.full(t.shape, 50), "k--", linewidth=1)
+    ax_pos.plot(t, np.full(t.shape, 0.775 / 2), color="grey", linestyle="--", linewidth=1, label="Bounds")
+    ax_pos.plot(t, np.full(t.shape, -0.775 / 2), color="grey", linestyle="--", linewidth=1)
+    ax_theta.plot(t, np.rad2deg(sim.all_u[:n_steps] - sim.params["theta_offset"]), color="navy",
+                  linestyle="--", linewidth=0.7, label="Commanded angle [deg]")
+    ax_theta.plot(t, np.rad2deg(sim.all_u[:n_steps]), color="darkturquoise", linestyle="-",
+                  label="Actual offset angle [deg]")
+    ax_theta.plot(t, np.full(t.shape, -50), color="grey", linestyle="--", linewidth=1)
+    ax_theta.plot(t, np.full(t.shape, 50), color="grey", linestyle="--", linewidth=1)
     # ax_pos.legend()
     # ax_theta.legend()
     fig.legend(loc="right")
