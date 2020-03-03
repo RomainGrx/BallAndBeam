@@ -43,6 +43,7 @@ class BBController(abc.ABC):
         :param flags_1 : Etat des 'flags' au dernier appel du controleur.
         :return        : 'u', la nouvelle commande a appliquer sur le systeme [rad].
         """
+        
         raise NotImplementedError("BBController must implement method 'control_law'.")
 
     def simulate(self, setpoint, command_noise_func=lambda *args, **kwargs: 0,
@@ -85,15 +86,19 @@ class PIDBBController(BBController):
         #
         # Integrale de l'erreur avec le flag #0
         # Memorisation de la position precedente avec le flag #1
+        vit=(pos-flags_1[1])/dt
+        if(pos>0.35):
+            ref=0.35
+        if(pos<-0.35):
+            ref=-0.35
         kp, ki, kd = self.kp, self.ki, self.kd          # A hardcoder dans LabVIEW
         theta_offset = self.sim.params["theta_offset"]  # A hardcoder dans LabVIEW
-
         err = pos - ref
+        
         deriv_err = (pos - self.flags[1]) / dt
         self.flags[0] += err * dt
         self.flags[1] = pos
         integ_err = self.flags[0]
-
         return kp * err + ki * integ_err + kd * deriv_err - theta_offset
 
 
@@ -136,8 +141,8 @@ if __name__ == "__main__":
     n_steps = t.size
 
     # setpoint = np.full(t.shape, 0.25)  # Setpoint constant: "maintenir la bille a une position fixee"
-    # setpoint = 0.15 * np.sin(2 * np.pi * t / 9)  # Setpoint = sinus de periode 9s et d'amplitude 0.15m
-    setpoint = 0.15 * sig.square(2 * np.pi * t / 9)  # Setpoint = carre de periode 9s et d'amplitude 0.15m
+    setpoint = 0.3875 * np.sin(2 * np.pi * t/20)  # Setpoint = sinus de periode 9s et d'amplitude 0.15m
+    #setpoint = 0.5 * sig.square(2 * np.pi * t / 9)  # Setpoint = carre de periode 9s et d'amplitude 0.15m
 
     # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID sur la reference 'setpoint'
     # et pour le simulateur 'sim'
@@ -150,8 +155,8 @@ if __name__ == "__main__":
     # Valeurs de parametres PID obtenues pour un setpoint constant a 0.25m
     # cont = PIDBBController(sim, 13.36836963,  0.22281434,  4.79696383)
 
-    cont.simulate(setpoint, n_steps=n_steps)
-
+    cont.simulate(setpoint, n_steps=n_steps)#,init_state=[0.15,0.0])
+    
     fig, ((ax_pos), (ax_theta)) = plt.subplots(nrows=2, sharex=True)
     ax_pos.plot(t, setpoint, "ro--", linewidth=0.7, markersize=2, markevery=20, label="Setpoint [m]")
     ax_pos.plot(t, sim.all_y[:n_steps], "k-", label="Position [m]")
