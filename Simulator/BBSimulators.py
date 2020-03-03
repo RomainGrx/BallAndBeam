@@ -205,7 +205,7 @@ if __name__ == "__main__":
     def my_command_func(timestep, params, all_t, all_u, all_y, dt):
         # Donnees utilisables jusqu'a l'indice [timestep - 1]
         t = timestep * dt
-        # return 0
+        # return 0pas
         return np.deg2rad(50)
         # return np.array([-np.pi / 6])
         # return np.sin(t * 1) * (-np.pi / 2)
