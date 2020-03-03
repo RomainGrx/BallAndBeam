@@ -15,11 +15,16 @@ if __name__ == "__main__":
 
     base_dir = "./Objectif 1/Tests Input"  # Repertoire contenant les fichiers d'input (angle alpha en degres)
     dt = 0.05                              # Periode d'echantillonnage [s]
-    test_span = 10                         # Duree d'un test [s]
+    test_span = 30                         # Duree d'un test [s]
 
-    all_alphas = np.arange(-45, 45, 5)
-    for alpha in all_alphas:
-        # On va recycler les fonctions d'ecriture de tests qu'on a utilisees pour la validation.
-        # La fonction s'appelle 'write_theta' mais elle fonctionne tres bien pour ecrire des angles 'alpha' aussi.
-        Tests.write_theta(os.path.join(base_dir, "obj_1_ref_{:.0f}.txt".format(alpha)),
-                          np.full(int(test_span / dt), fill_value=alpha))
+    # all_alphas = np.arange(-25, -20, 1)
+    # for alpha in all_alphas:
+    #     # On va recycler les fonctions d'ecriture de tests qu'on a utilisees pour la validation.
+    #     # La fonction s'appelle 'write_theta' mais elle fonctionne tres bien pour ecrire des angles 'alpha' aussi.
+    #     Tests.write_theta(os.path.join(base_dir, "obj_1_ref_{:.0f}.txt".format(alpha)),
+    #                       np.full(int(test_span / dt), fill_value=alpha))
+
+    alpha = np.linspace(-30, 30, int(test_span / dt))
+    # On va recycler les fonctions d'ecriture de tests qu'on a utilisees pour la validation.
+    # La fonction s'appelle 'write_theta' mais elle fonctionne tres bien pour ecrire des angles 'alpha' aussi.
+    Tests.write_theta(os.path.join(base_dir, "obj_1_ref_-30_30.txt"), alpha)

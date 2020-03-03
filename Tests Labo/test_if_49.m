@@ -30,32 +30,8 @@ Flag_1 = [0 0 0 0 0 0 0 0];
 % on va utiliser ref pour specifier l'angle de la poutre que l'on veut et
 % ce en degres.
 
-% Dimensions caracteristiques du systeme.
-theta_offset = -rad_to_deg(1.07698393e-01);  % Offset (environ -6.17 deg)
-d = 55 / 1000;   % Longueur de la premiere barre attachee au servo [m]
-b = 150 / 1000;  % Distance entre le pivot et le point d'attache du second
-                 % bras du servo [m]
-                 
-Flag = Flag_1;   % Mettre cette ligne sinon LabVIEW crash.
-
-% On utilise la formule qui lie l'angle theta (servo) a l'angle alpha
-% (poutre) et puis voila.
-
-theta_min = -49;
-theta_max = 49;
-
-% Si rad_to_deg et deg_to_rad ne marchent pas: utiliser rad2deg et deg2rad
-theta = rad_to_deg(asin(b / d * sin(deg_to_rad(Ref)))) - theta_offset;
-
-% Il devrait y avoir une securite sur la valeur de l'angle, mais on va
-% en remettre une nous-memes juste pour etre sur de rien casser.
-if theta < theta_min
-    u1 = theta_min;
-elseif theta > theta_max
-    u1 = theta_max;
-else
-    u1 = theta;
-end
+Flag = Flag_1;
+u1 = 49;
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%% Copier dans LabVIEW jusqu'ici %%%%%%%%%%%%%%%%%%%%%%%%%

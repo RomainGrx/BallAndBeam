@@ -85,6 +85,7 @@ class PIDBBController(BBController):
         #
         # Integrale de l'erreur avec le flag #0
         # Memorisation de la position precedente avec le flag #1
+        self.flags = flags_1  # Necessaire pour MathScript (sinon LabVIEW crash)
         kp, ki, kd = self.kp, self.ki, self.kd          # A hardcoder dans LabVIEW
         theta_offset = self.sim.params["theta_offset"]  # A hardcoder dans LabVIEW
 
@@ -126,6 +127,30 @@ def fit_pid(sim, setpoint, init_values=None, method=None, bounds=None):
     return opt.minimize(err_func, init_values, method=method, bounds=bounds)
 
 
+class CedricController(BBController):
+    @Simulator.command_limiter(low_bound=np.deg2rad(-50), up_bound=np.deg2rad(50))
+    def control_law(self, ref, pos, dt, u_1, flags_1):
+        # Modifie self.flags et retourne u
+        # Attention, dans LabVIEW ref est donne en cm, mais ici on le fait en m.
+        # De meme, les angles sont geres en degres dans LabVIEW et en radians ici.
+
+        # Pour l'objectif 2, on a besoin de donner une petite vitesse a la balle
+        # on utilise les flags pour bypasser le controller sur les quelques premieres
+        # iterations.
+        self.flags = flags_1
+        if self.flags[0] == 0:
+            self.flags[0] = 1
+            self.flags[1] = 20
+
+        if self.flags[0] == 1 and self.flags[1] > 0:
+            # Phase "d'initialisation"
+            self.flags[1] -= 1
+            return np.deg2rad(-30)
+        else:
+            # Phase "controleur"
+            return np.deg2rad(30)
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import scipy.signal as sig
@@ -145,11 +170,13 @@ if __name__ == "__main__":
     # exit()
 
     # Valeurs de parametres PID obtenues par optimisation sur un signal carre de periode 9s
-    cont = PIDBBController(sim, 11.83864757, -0.05425518,  3.83534646)
+    # cont = PIDBBController(sim, 11.83864757, -0.05425518,  3.83534646)
+    cont = CedricController(sim)
 
     # Valeurs de parametres PID obtenues pour un setpoint constant a 0.25m
     # cont = PIDBBController(sim, 13.36836963,  0.22281434,  4.79696383)
 
+    # cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0.2, 0]))
     cont.simulate(setpoint, n_steps=n_steps)
 
     fig, ((ax_pos), (ax_theta)) = plt.subplots(nrows=2, sharex=True)
