@@ -136,9 +136,9 @@ class Obj2PIDBBController(BBController):
         else:
             # Phase "controleur"
             # Idiot proofing
-            if pos > 0.35:
+            if ref > 0.35:
                 ref = 0.35
-            if pos < -0.35:
+            if ref < -0.35:
                 ref = -0.35
 
             # Controle PID
