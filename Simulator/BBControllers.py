@@ -16,26 +16,24 @@ class BBController(abc.ABC):
     LabVIEW. Cela est fait pour permettre un developpement du controleur qui reste proche de ce qui devra etre
     implemente a la fin du projet.
     """
+
     def __init__(self, sim):
         """
         Initialisation du controleur.
-
         :param sim : Objet de type 'BBSimulator' qui simule le systeme.
         """
         self.sim = sim
         self.dt = sim.dt
         self.buffer_size = sim.buffer_size
-        self.flags = np.zeros((8,))         # Il y a huit 'flags' qui peuvent etre passes d'iteration en iteration.
+        self.flags = np.zeros((8,))  # Il y a huit 'flags' qui peuvent etre passes d'iteration en iteration.
 
     def control_law(self, ref, pos, dt, u_1, flags_1):
         """
         Loi de controle qui permet de calculer une nouvelle commande sur base de divers
         parametres. Les 'flags' peuvent etre modifies.
-
         Note: Dans LabVIEW, certaines valeurs sont passees en centimetres, mais ici on travaille en metres.
               Il suffira de faire la conversion au moment voulu. De meme, dans LabVIEW, on gere les angles
               en degres, mais ici on les gere en radians.
-
         :param ref     : Valeur de reference visee en cet instant [m].
         :param pos     : Position actuelle de la bille [m].
         :param dt      : Periode d'echantillonnage [s].
@@ -43,7 +41,7 @@ class BBController(abc.ABC):
         :param flags_1 : Etat des 'flags' au dernier appel du controleur.
         :return        : 'u', la nouvelle commande a appliquer sur le systeme [rad].
         """
-        
+
         raise NotImplementedError("BBController must implement method 'control_law'.")
 
     def simulate(self, setpoint, command_noise_func=lambda *args, **kwargs: 0,
@@ -52,7 +50,6 @@ class BBController(abc.ABC):
         Fonction qui lance la simulation avec la loi de commande specifiee dans 'control_law'. Les valeurs
         de la reference visee sont contenues dans 'setpoint'. 'setpoint' doit contenir 'n_steps' elements
         ou plus.
-
         :param setpoint           : array de longueur 'n_steps' contenant ls valeurs du setpoint (la reference).
         :param command_noise_func : Fonction de bruit sur la commande (cf. docstring de 'Simulator.simulate').
         :param output_noise_func  : Fonction de bruit sur la sortie (cf. docstring de 'Simulator.simulate').
@@ -60,6 +57,7 @@ class BBController(abc.ABC):
         :param init_state         : Etat initial du systeme.
         :return                   : None
         """
+
         # Creation d'une 'command_func' qui se base sur la loi de controle specifiee dans 'control_law'.
         def command_func(timestep, params, all_t, all_u, all_y, dt):
             if timestep > 0:
@@ -86,23 +84,24 @@ class PIDBBController(BBController):
         # De meme, les angles sont geres en degres dans LabVIEW et en radians ici.
         #
         # Integrale de l'erreur avec le flag #0
-        # Memorisation de la position precedente avec le flag #1
+        # Memorisation de l'erreur precedente avec le flag #1
 
         self.flags = flags_1  # Necessaire pour MathScript (sinon LabVIEW crash)
+        # ref = pos
 
         kp, ki, kd = self.kp, self.ki, self.kd  # A hardcoder dans LabVIEW
         theta_offset = self.sim.params["theta_offset"]  # A hardcoder dans LabVIEW
         err = pos - ref
 
-        deriv_err = (pos - self.flags[1]) / dt
+        deriv_err = (err - self.flags[1]) / dt
         self.flags[0] += err * dt
-        self.flags[1] = pos
+        self.flags[1] = err
         integ_err = self.flags[0]
 
         return kp * err + ki * integ_err + kd * deriv_err - theta_offset
 
 
-class Obj2PIDBBController(BBController):
+class Obj3PIDBBController(BBController):
     """
     Classe qui implemente une loi de controle de type PID pour le systeme Ball and Beam du projet P4 MAP.
     Ce controleur implemente aussi une version du "idiot proofing".
@@ -119,15 +118,16 @@ class Obj2PIDBBController(BBController):
         # De meme, les angles sont geres en degres dans LabVIEW et en radians ici.
         #
         # Integrale de l'erreur avec le flag #0
-        # Memorisation de la position precedente avec le flag #1
+        # Memorisation de l'erreur precedente avec le flag #2
+        # Memorisation de la position precedente avec le flag #3
 
-        # Pour l'objectif 2, on a besoin de donner une petite vitesse a la balle
-        # on utilise les flags pour bypasser le controller sur les quelques premieres
+        # Pour l'objectif 3, on a besoin de donner une petite vitesse a la balle
+        # on utilise les flags 0 et 1 pour bypasser le controller sur les quelques premieres
         # iterations.
         self.flags = flags_1
         if self.flags[0] == 0:
             self.flags[0] = 1
-            self.flags[1] = 200  # On bypass le controle sur 200 iterations (10s)
+            self.flags[1] = 0#200  # On bypass le controle sur 200 iterations (10s)
 
         if self.flags[0] == 1 and self.flags[1] > 0:
             # Phase "d'initialisation"
@@ -135,20 +135,35 @@ class Obj2PIDBBController(BBController):
             return np.deg2rad(-30)
         else:
             # Phase "controleur"
-            # Idiot proofing
-            if ref > 0.35:
-                ref = 0.35
-            if ref < -0.35:
-                ref = -0.35
+            # On met une limite sur ref et aussi une limite sur la vitesse:
+            # - Si ref est hors de +-0.35m, on le bride
+            # - Si la bille va trop vite vers le bord, on essaye d'abord de la ralentir (e.g. on met ref=0)
+
+            # Idiot proofing:
+            # On impose que (dans l'ordre de prorite decroissant):
+            # 1) la vitesse soit limitee par une droite valant 40 cm/s en pos=0 et valant 0 cm/s en pos=+-35 cm/s
+            # 2) la position est limitee entre -35cm et 35cm
+            speed = (pos - self.flags[3]) / dt
+            self.flags[3] = pos
+
+            ####### WORK IN PROGRESS ##############
+            # if (0.20 - speed) / max(abs(pos), 0.001) < 0.20 / 0.35 and -0.35 < ref < 0.35:
+            #     ref = 0
+            # elif
+            if ref < -0.35 and pos < -0.35:
+                ref = 0
+            elif ref > 0.35 and pos > 0.35:
+                ref = 0
+            ####### WORK IN PROGRESS ##############
 
             # Controle PID
             kp, ki, kd = self.kp, self.ki, self.kd  # A hardcoder dans LabVIEW
             theta_offset = self.sim.params["theta_offset"]  # A hardcoder dans LabVIEW
             err = pos - ref
 
-            deriv_err = (pos - self.flags[1]) / dt
+            deriv_err = (err - self.flags[2]) / dt
             self.flags[0] += err * dt
-            self.flags[1] = pos
+            self.flags[2] = err
             integ_err = self.flags[0]
 
             return kp * err + ki * integ_err + kd * deriv_err - theta_offset
@@ -159,7 +174,6 @@ def fit_pid(sim, setpoint, init_values=None, method=None, bounds=None):
     Fonction permettant de faire une minimisation de la MSE pour un controleur PID et sur un
     simulateur donne. Le simulateur est de type 'BBSimulator'. La minimisation se fait pour
     une suite de 'setpoints' donnee et n'a donc pas un caractere "general".
-
     :param sim         : Objet de type 'BBSimulator' qui gere la simulation du systeme.
     :param setpoint    : Array de points de reference sur lesquels la minimisation s'appuye.
     :param init_values : Valeurs initiales pour Kp, Ki et Kd. Prises au hasard si 'init_values'=None.
@@ -168,6 +182,7 @@ def fit_pid(sim, setpoint, init_values=None, method=None, bounds=None):
                          Voir la documentation de 'scipy.optimize.minimize'.
     :return            : Un objet 'OptimizeResult' issu de la minimisation.
     """
+
     def err_func(params):
         # Fonction d'erreur calculant la MSE pour les parametres 'params'.
         kp, ki, kd = params
@@ -189,28 +204,30 @@ if __name__ == "__main__":
     from BBSimulators import BBThetaSimulator
 
     sim = BBThetaSimulator()
-    t = np.arange(0, 90, sim.dt)  # Simulation de 90s
+    t = np.arange(0, 180, sim.dt)  # Simulation de 30s
     n_steps = t.size
 
     # setpoint = np.full(t.shape, 0.25)  # Setpoint constant: "maintenir la bille a une position fixee"
-    setpoint = 0.3875 * np.sin(2 * np.pi * t/20)  # Setpoint = sinus de periode 9s et d'amplitude 0.15m
-    #setpoint = 0.5 * sig.square(2 * np.pi * t / 9)  # Setpoint = carre de periode 9s et d'amplitude 0.15m
+    setpoint = 0.3875 * np.sin(2 * np.pi * t / 20)  # Setpoint = sinus de periode 9s et d'amplitude 0.15m
+    # setpoint = 0.5 * sig.square(2 * np.pi * t / 9)  # Setpoint = carre de periode 9s et d'amplitude 0.15m
+    # setpoint = 0.25 * np.sin(2 * np.pi * t / 9)  # Setpoint = carre de periode 9s et d'amplitude 0.15m
 
     # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID sur la reference 'setpoint'
     # et pour le simulateur 'sim'
     # print(fit_pid(sim, setpoint, init_values=np.array([10.31712585,  0.49838698,  3.88553031]), method="Powell"))
+    # print(fit_pid(sim, setpoint, init_values=np.array([10.31712585,  0.49838698,  3.88553031]), method="L-BFGS-B",
+    #               bounds=((-20, 20), (-20, 20), (-20, 20))))
     # exit()
 
-    # Valeurs de parametres PID obtenues par optimisation sur un signal carre de periode 9s
-    # cont = PIDBBController(sim, 11.83864757, -0.05425518,  3.83534646)
+    # Valeurs de parametres PID obtenues par optimisation
+    # cont = PIDBBController(sim, 20., -0.23170773, 20)
     # cont = CedricController(sim)
-    cont = Obj2PIDBBController(sim, 11.83864757, -0.05425518,  3.83534646)
+    cont = Obj3PIDBBController(sim, 20., -0.23170773, 20)
 
     # Valeurs de parametres PID obtenues pour un setpoint constant a 0.25m
     # cont = PIDBBController(sim, 13.36836963,  0.22281434,  4.79696383)
 
-    # cont.simulate(setpoint, n_steps=n_steps, init_state=
-    cont.simulate(setpoint, n_steps=n_steps)
+    cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0.2, -0.3]))
 
     fig, ((ax_pos), (ax_theta)) = plt.subplots(nrows=2, sharex=True)
     ax_pos.plot(t, setpoint, "ro--", linewidth=0.7, markersize=2, markevery=20, label="Setpoint [m]")
@@ -220,8 +237,8 @@ if __name__ == "__main__":
     ax_pos.plot(t, np.full(t.shape, -0.775 / 2), color="grey", linestyle="--", linewidth=1)
     ax_theta.plot(t, np.rad2deg(sim.all_u[:n_steps] - sim.params["theta_offset"]), color="navy",
                   linestyle="--", linewidth=0.7, label="Commanded angle [deg]")
-    ax_theta.plot(t, np.rad2deg(sim.all_u[:n_steps]), color="darkturquoise", linestyle="-",
-                  label="Actual offset angle [deg]")
+    # ax_theta.plot(t, np.rad2deg(sim.all_u[:n_steps]), color="darkturquoise", linestyle="-",
+    #               label="Actual offset angle [deg]")
     ax_theta.plot(t, np.full(t.shape, -50), color="grey", linestyle="--", linewidth=1)
     ax_theta.plot(t, np.full(t.shape, 50), color="grey", linestyle="--", linewidth=1)
     # ax_pos.legend()

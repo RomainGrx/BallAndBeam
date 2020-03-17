@@ -24,7 +24,11 @@ if __name__ == "__main__":
     #     Tests.write_theta(os.path.join(base_dir, "obj_1_ref_{:.0f}.txt".format(alpha)),
     #                       np.full(int(test_span / dt), fill_value=alpha))
 
-    alpha = np.linspace(-30, 30, int(test_span / dt))
-    # On va recycler les fonctions d'ecriture de tests qu'on a utilisees pour la validation.
-    # La fonction s'appelle 'write_theta' mais elle fonctionne tres bien pour ecrire des angles 'alpha' aussi.
-    Tests.write_theta(os.path.join(base_dir, "obj_1_ref_-30_30.txt"), alpha)
+    # alpha = np.linspace(-30, 30, int(test_span / dt))
+    # # On va recycler les fonctions d'ecriture de tests qu'on a utilisees pour la validation.
+    # # La fonction s'appelle 'write_theta' mais elle fonctionne tres bien pour ecrire des angles 'alpha' aussi.
+    # Tests.write_theta(os.path.join(base_dir, "obj_1_ref_-30_30.txt"), alpha)
+
+    t = np.arange(0, 30, 0.05)
+    pos = 45 * np.sin(2 * np.pi * t / 6)
+    Tests.write_theta(os.path.join(base_dir, "cedric_sin_6s_45cm.txt"), pos)
