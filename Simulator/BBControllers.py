@@ -119,7 +119,6 @@ class Obj3PIDBBController(BBController):
         #
         # Integrale de l'erreur avec le flag #0
         # Memorisation de l'erreur precedente avec le flag #2
-        # Memorisation de la position precedente avec le flag #3
 
         # Pour l'objectif 3, on a besoin de donner une petite vitesse a la balle
         # on utilise les flags 0 et 1 pour bypasser le controller sur les quelques premieres
@@ -135,30 +134,35 @@ class Obj3PIDBBController(BBController):
             return np.deg2rad(-30)
         else:
             # Phase "controleur"
-            # On met une limite sur ref et aussi une limite sur la vitesse:
-            # - Si ref est hors de +-0.35m, on le bride
-            # - Si la bille va trop vite vers le bord, on essaye d'abord de la ralentir (e.g. on met ref=0)
-
-            # Idiot proofing:
-            # On impose que (dans l'ordre de prorite decroissant):
-            # 1) la vitesse soit limitee par une droite valant 40 cm/s en pos=0 et valant 0 cm/s en pos=+-35 cm/s
-            # 2) la position est limitee entre -35cm et 35cm
-            speed = (pos - self.flags[3]) / dt
-            self.flags[3] = pos
-
-            ####### WORK IN PROGRESS ##############
-            # if (0.20 - speed) / max(abs(pos), 0.001) < 0.20 / 0.35 and -0.35 < ref < 0.35:
-            #     ref = 0
-            # elif
-            if ref < -0.35 and pos < -0.35:
-                ref = 0
-            elif ref > 0.35 and pos > 0.35:
-                ref = 0
-            ####### WORK IN PROGRESS ##############
-
-            # Controle PID
+            # Parametres du PID:
             kp, ki, kd = self.kp, self.ki, self.kd  # A hardcoder dans LabVIEW
             theta_offset = self.sim.params["theta_offset"]  # A hardcoder dans LabVIEW
+
+            # Idiot proofing:
+            # Entre a_pos et b_pos, on applique un angle qui varie lineairement entre alpha_a_pos et alpha_b_pos
+            # pour forcer une correction de la trajectoire. Le controle et ref sont bypasses dans ce cas.
+            a_pos = 0.35
+            b_pos = 0.775 / 2
+            alpha_a_pos, alpha_b_pos = np.deg2rad(20), np.deg2rad(49)
+            if pos > a_pos:
+                return alpha_a_pos + (pos - a_pos) * (alpha_b_pos - alpha_a_pos) / (b_pos - a_pos) - theta_offset
+            elif pos < -a_pos:
+                return -alpha_a_pos + (pos + a_pos) * (alpha_b_pos - alpha_a_pos) / (b_pos - a_pos) - theta_offset
+
+            # Si il n'y a pas lieu de faire une correction sur la position, mais qu'on voit que ref s'approche un peu
+            # trop violemment des limites a_pos et b_pos sur la position, alors on applique une correction de type
+            # "1/x" sur ref pour que la balle s'approche plus doucement des limites de position.
+            # La fonction de correction est telle que:
+            # f(a_ref) = a_ref; f(+inf) = b_ref; evolution de type 1/x entre les deux.
+            a_ref = 0.65 * a_pos
+            b_ref = 0.90 * a_pos
+            if ref > a_ref:
+                ref = b_ref - a_ref * (b_ref - a_ref) / ref
+            if ref < -a_ref:
+                ref = -b_ref - a_ref * (b_ref - a_ref) / ref
+            # Fin de l'idiot-proofing
+
+            # Controle PID
             err = pos - ref
 
             deriv_err = (err - self.flags[2]) / dt
@@ -204,25 +208,24 @@ if __name__ == "__main__":
     from BBSimulators import BBThetaSimulator
 
     sim = BBThetaSimulator()
-    t = np.arange(0, 180, sim.dt)  # Simulation de 30s
+    t = np.arange(0, 120, sim.dt)  # Simulation d'un certain nombre de secondes (2e argument)
     n_steps = t.size
 
     # setpoint = np.full(t.shape, 0.25)  # Setpoint constant: "maintenir la bille a une position fixee"
-    setpoint = 0.3875 * np.sin(2 * np.pi * t / 20)  # Setpoint = sinus de periode 9s et d'amplitude 0.15m
-    # setpoint = 0.5 * sig.square(2 * np.pi * t / 9)  # Setpoint = carre de periode 9s et d'amplitude 0.15m
+    setpoint = 0.3875 * np.sin(2 * np.pi * t / 15)  # Setpoint = sinus de periode 9s et d'amplitude 0.15m
+    # setpoint = 0.3875 * sig.square(2 * np.pi * t / 15)  # Setpoint = carre de periode 9s et d'amplitude 0.15m
     # setpoint = 0.25 * np.sin(2 * np.pi * t / 9)  # Setpoint = carre de periode 9s et d'amplitude 0.15m
 
     # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID sur la reference 'setpoint'
     # et pour le simulateur 'sim'
-    # print(fit_pid(sim, setpoint, init_values=np.array([10.31712585,  0.49838698,  3.88553031]), method="Powell"))
+    # print(fit_pid(sim, setpoint, init_values=np.array([51.25805776, -0.21727106, 7.67898543]), method="Powell"))
     # print(fit_pid(sim, setpoint, init_values=np.array([10.31712585,  0.49838698,  3.88553031]), method="L-BFGS-B",
     #               bounds=((-20, 20), (-20, 20), (-20, 20))))
     # exit()
 
     # Valeurs de parametres PID obtenues par optimisation
     # cont = PIDBBController(sim, 20., -0.23170773, 20)
-    # cont = CedricController(sim)
-    cont = Obj3PIDBBController(sim, 20., -0.23170773, 20)
+    cont = Obj3PIDBBController(sim, 51.25805776, -0.21727106, 7.67898543)
 
     # Valeurs de parametres PID obtenues pour un setpoint constant a 0.25m
     # cont = PIDBBController(sim, 13.36836963,  0.22281434,  4.79696383)
