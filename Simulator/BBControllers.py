@@ -107,8 +107,9 @@ class Obj3PIDBBController(BBController):
     Ce controleur implemente aussi une version du "idiot proofing".
     """
 
-    def __init__(self, sim, kp, ki, kd):
+    def __init__(self, sim, kp, ki, kd, using_idiot_proofing=True):
         super().__init__(sim)
+        self.using_idiot_proofing = using_idiot_proofing
         self.kp, self.ki, self.kd = kp, ki, kd
 
     @Simulator.command_limiter(low_bound=np.deg2rad(-50), up_bound=np.deg2rad(50))
@@ -138,37 +139,38 @@ class Obj3PIDBBController(BBController):
             kp, ki, kd = self.kp, self.ki, self.kd  # A hardcoder dans LabVIEW
             theta_offset = self.sim.params["theta_offset"]  # A hardcoder dans LabVIEW
 
-            # Idiot proofing:
-            # Entre a_pos et b_pos, on applique un angle qui varie lineairement entre alpha_a_pos et alpha_b_pos
-            # pour forcer une correction de la trajectoire. Le controle et ref sont bypasses dans ce cas.
-            a_pos = 0.35
-            b_pos = 0.775 / 2
-            alpha_a_pos, alpha_b_pos = np.deg2rad(20), np.deg2rad(49)
-            if pos > a_pos:
-                return alpha_a_pos + (pos - a_pos) * (alpha_b_pos - alpha_a_pos) / (b_pos - a_pos) - theta_offset
-            elif pos < -a_pos:
-                return -alpha_a_pos + (pos + a_pos) * (alpha_b_pos - alpha_a_pos) / (b_pos - a_pos) - theta_offset
+            if self.using_idiot_proofing:
+                # Idiot proofing:
+                # Entre a_pos et b_pos, on applique un angle qui varie lineairement entre alpha_a_pos et alpha_b_pos
+                # pour forcer une correction de la trajectoire. Le controle et ref sont bypasses dans ce cas.
+                a_pos = 0.35
+                b_pos = 0.775 / 2
+                alpha_a_pos, alpha_b_pos = np.deg2rad(20), np.deg2rad(49)
+                if pos > a_pos:
+                    return alpha_a_pos + (pos - a_pos) * (alpha_b_pos - alpha_a_pos) / (b_pos - a_pos) - theta_offset
+                elif pos < -a_pos:
+                    return -alpha_a_pos + (pos + a_pos) * (alpha_b_pos - alpha_a_pos) / (b_pos - a_pos) - theta_offset
 
-            # Si la reference est abberrante (i.e.: hors limites), on la bride une premiere fois.
-            # Faire ceci permet derelaxer un peu le reste de l'idiot-proofing afin de pouvoir s'approcher un peu
-            # plus des bords pour les trajectoires "normales" (i.e. pas hors limites).
-            if ref > 0.775 / 2:
-                ref = 0.775 / 2
-            if ref < -0.775 / 2:
-                ref = -0.775 / 2
+                # Si la reference est abberrante (i.e.: hors limites), on la bride une premiere fois.
+                # Faire ceci permet derelaxer un peu le reste de l'idiot-proofing afin de pouvoir s'approcher un peu
+                # plus des bords pour les trajectoires "normales" (i.e. pas hors limites).
+                if ref > 0.775 / 2:
+                    ref = 0.775 / 2
+                if ref < -0.775 / 2:
+                    ref = -0.775 / 2
 
-            # Si il n'y a pas lieu de faire une correction sur la position, mais qu'on voit que ref s'approche un peu
-            # trop violemment des limites a_pos et b_pos sur la position, alors on applique une correction de type
-            # "1/x" sur ref pour que la balle s'approche plus doucement des limites de position.
-            # La fonction de correction est telle que:
-            # f(a_ref) = a_ref; f(+inf) = b_ref; evolution de type 1/x entre les deux.
-            a_ref = 0.80 * a_pos
-            b_ref = 0.90 * a_pos
-            if ref > a_ref:
-                ref = b_ref - a_ref * (b_ref - a_ref) / ref
-            if ref < -a_ref:
-                ref = -b_ref - a_ref * (b_ref - a_ref) / ref
-            # Fin de l'idiot-proofing
+                # Si il n'y a pas lieu de faire une correction sur la position, mais qu'on voit que ref s'approche un peu
+                # trop violemment des limites a_pos et b_pos sur la position, alors on applique une correction de type
+                # "1/x" sur ref pour que la balle s'approche plus doucement des limites de position.
+                # La fonction de correction est telle que:
+                # f(a_ref) = a_ref; f(+inf) = b_ref; evolution de type 1/x entre les deux.
+                a_ref = 0.90 * a_pos
+                b_ref = 0.95 * a_pos
+                if ref > a_ref:
+                    ref = b_ref - a_ref * (b_ref - a_ref) / ref
+                if ref < -a_ref:
+                    ref = -b_ref - a_ref * (b_ref - a_ref) / ref
+                # Fin de l'idiot-proofing
 
             # Controle PID
             err = pos - ref
@@ -227,68 +229,68 @@ if __name__ == "__main__":
     setpoints_to_fit = (
         # Quelques trajectoires constantes:
         np.zeros(t.shape),
-        # np.full(t.shape, -0.30),
+        np.full(t.shape, -0.30),
         np.full(t.shape, -0.20),
-        # np.full(t.shape, -0.10),
-        # np.full(t.shape, 0.10),
+        np.full(t.shape, -0.10),
+        np.full(t.shape, 0.10),
         np.full(t.shape, 0.20),
-        # np.full(t.shape, 0.30),
+        np.full(t.shape, 0.30),
         # Quelques trajectoires sinusoidales:
-        # 0.1 * np.sin(2 * np.pi * t / 30),
-        # 0.2 * np.sin(2 * np.pi * t / 30),
-        # 0.3 * np.sin(2 * np.pi * t / 30),
-        # -0.1 * np.sin(2 * np.pi * t / 30),
-        # -0.2 * np.sin(2 * np.pi * t / 30),
-        # -0.3 * np.sin(2 * np.pi * t / 30),
-        # 0.1 * np.sin(2 * np.pi * t / 15),
+        0.1 * np.sin(2 * np.pi * t / 30),
+        0.2 * np.sin(2 * np.pi * t / 30),
+        0.3 * np.sin(2 * np.pi * t / 30),
+        -0.1 * np.sin(2 * np.pi * t / 30),
+        -0.2 * np.sin(2 * np.pi * t / 30),
+        -0.3 * np.sin(2 * np.pi * t / 30),
+        0.1 * np.sin(2 * np.pi * t / 15),
         0.2 * np.sin(2 * np.pi * t / 15),
-        # 0.3 * np.sin(2 * np.pi * t / 15),
+        0.3 * np.sin(2 * np.pi * t / 15),
         -0.1 * np.sin(2 * np.pi * t / 15),
-        # -0.2 * np.sin(2 * np.pi * t / 15),
-        # -0.3 * np.sin(2 * np.pi * t / 15),
+        -0.2 * np.sin(2 * np.pi * t / 15),
+        -0.3 * np.sin(2 * np.pi * t / 15),
         0.1 * np.sin(2 * np.pi * t / 9),
-        # 0.2 * np.sin(2 * np.pi * t / 9),
-        # 0.3 * np.sin(2 * np.pi * t / 9),
-        # -0.1 * np.sin(2 * np.pi * t / 9),
+        0.2 * np.sin(2 * np.pi * t / 9),
+        0.3 * np.sin(2 * np.pi * t / 9),
+        -0.1 * np.sin(2 * np.pi * t / 9),
         -0.2 * np.sin(2 * np.pi * t / 9),
-        # -0.3 * np.sin(2 * np.pi * t / 9),
-        # 0.1 * np.sin(2 * np.pi * t / 7),
-        # 0.2 * np.sin(2 * np.pi * t / 7),
-        # 0.3 * np.sin(2 * np.pi * t / 7),
-        # -0.1 * np.sin(2 * np.pi * t / 7),
-        # -0.2 * np.sin(2 * np.pi * t / 7),
-        # -0.3 * np.sin(2 * np.pi * t / 7),
+        -0.3 * np.sin(2 * np.pi * t / 9),
+        0.1 * np.sin(2 * np.pi * t / 7),
+        0.2 * np.sin(2 * np.pi * t / 7),
+        0.3 * np.sin(2 * np.pi * t / 7),
+        -0.1 * np.sin(2 * np.pi * t / 7),
+        -0.2 * np.sin(2 * np.pi * t / 7),
+        -0.3 * np.sin(2 * np.pi * t / 7),
         # Quelques trajectoires carrees:
-        # 0.1 * sig.square(2 * np.pi * t / 30),
-        # 0.2 * sig.square(2 * np.pi * t / 30),
-        # 0.3 * sig.square(2 * np.pi * t / 30),
-        # -0.1 * sig.square(2 * np.pi * t / 30),
-        # -0.2 * sig.square(2 * np.pi * t / 30),
-        # -0.3 * sig.square(2 * np.pi * t / 30),
-        # 0.1 * sig.square(2 * np.pi * t / 15),
+        0.1 * sig.square(2 * np.pi * t / 30),
+        0.2 * sig.square(2 * np.pi * t / 30),
+        0.3 * sig.square(2 * np.pi * t / 30),
+        -0.1 * sig.square(2 * np.pi * t / 30),
+        -0.2 * sig.square(2 * np.pi * t / 30),
+        -0.3 * sig.square(2 * np.pi * t / 30),
+        0.1 * sig.square(2 * np.pi * t / 15),
         0.2 * sig.square(2 * np.pi * t / 15),
-        # 0.3 * sig.square(2 * np.pi * t / 15),
+        0.3 * sig.square(2 * np.pi * t / 15),
         -0.1 * sig.square(2 * np.pi * t / 15),
-        # -0.2 * sig.square(2 * np.pi * t / 15),
-        # -0.3 * sig.square(2 * np.pi * t / 15),
+        -0.2 * sig.square(2 * np.pi * t / 15),
+        -0.3 * sig.square(2 * np.pi * t / 15),
         0.1 * sig.square(2 * np.pi * t / 9),
-        # 0.2 * sig.square(2 * np.pi * t / 9),
-        # 0.3 * sig.square(2 * np.pi * t / 9),
-        # -0.1 * sig.square(2 * np.pi * t / 9),
+        0.2 * sig.square(2 * np.pi * t / 9),
+        0.3 * sig.square(2 * np.pi * t / 9),
+        -0.1 * sig.square(2 * np.pi * t / 9),
         -0.2 * sig.square(2 * np.pi * t / 9),
-        # -0.3 * sig.square(2 * np.pi * t / 9),
-        # 0.1 * sig.square(2 * np.pi * t / 7),
-        # 0.2 * sig.square(2 * np.pi * t / 7),
-        # 0.3 * sig.square(2 * np.pi * t / 7),
-        # -0.1 * sig.square(2 * np.pi * t / 7),
-        # -0.2 * sig.square(2 * np.pi * t / 7),
-        # -0.3 * sig.square(2 * np.pi * t / 7),
+        -0.3 * sig.square(2 * np.pi * t / 9),
+        0.1 * sig.square(2 * np.pi * t / 7),
+        0.2 * sig.square(2 * np.pi * t / 7),
+        0.3 * sig.square(2 * np.pi * t / 7),
+        -0.1 * sig.square(2 * np.pi * t / 7),
+        -0.2 * sig.square(2 * np.pi * t / 7),
+        -0.3 * sig.square(2 * np.pi * t / 7),
     )
 
     # setpoint = np.full(t.shape, 0.30)  # Setpoint constant: "maintenir la bille a une position fixee"
     # setpoint = -0.30 * np.sin(2 * np.pi * t / 15)  # Setpoint = sinus
-    setpoint = 0.25 * sig.square(2 * np.pi * t / 100)  # Setpoint = carre
-    # setpoint = 0.25 * np.sin(2 * np.pi * t / 40)  # Setpoint = sinus
+    # setpoint = 0.50 * sig.square(2 * np.pi * t / 15)  # Setpoint = carre
+    setpoint = 0.25 * np.sin(2 * np.pi * t / 9)  # Setpoint = sinus
 
 
     # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID sur la reference 'setpoint'
@@ -301,7 +303,10 @@ if __name__ == "__main__":
 
     # Valeurs de parametres PID obtenues par optimisation de l'erreur totale (lineaire, pas MSE)
     # sur un mix de setpoints (constant/sinus/carre).
-    cont = Obj3PIDBBController(sim, 5.13051124e+01, -1.59963530e-02,  9.82885344e+00)
+    # cont = Obj3PIDBBController(sim, 5.13051124e+01, -1.59963530e-02, 9.82885344e+00,  # Avec un sous-ensemble
+    #                            using_idiot_proofing=True)
+    cont = Obj3PIDBBController(sim, 4.82231182e+01, 3.36682083e-03, 1.34785172e+01,     # Avec tout
+                               using_idiot_proofing=True)
 
     cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0.2, -0.3]))
 
