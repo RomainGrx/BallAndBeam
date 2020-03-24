@@ -149,12 +149,20 @@ class Obj3PIDBBController(BBController):
             elif pos < -a_pos:
                 return -alpha_a_pos + (pos + a_pos) * (alpha_b_pos - alpha_a_pos) / (b_pos - a_pos) - theta_offset
 
+            # Si la reference est abberrante (i.e.: hors limites), on la bride une premiere fois.
+            # Faire ceci permet derelaxer un peu le reste de l'idiot-proofing afin de pouvoir s'approcher un peu
+            # plus des bords pour les trajectoires "normales" (i.e. pas hors limites).
+            if ref > 0.775 / 2:
+                ref = 0.775 / 2
+            if ref < -0.775 / 2:
+                ref = -0.775 / 2
+
             # Si il n'y a pas lieu de faire une correction sur la position, mais qu'on voit que ref s'approche un peu
             # trop violemment des limites a_pos et b_pos sur la position, alors on applique une correction de type
             # "1/x" sur ref pour que la balle s'approche plus doucement des limites de position.
             # La fonction de correction est telle que:
             # f(a_ref) = a_ref; f(+inf) = b_ref; evolution de type 1/x entre les deux.
-            a_ref = 0.65 * a_pos
+            a_ref = 0.80 * a_pos
             b_ref = 0.90 * a_pos
             if ref > a_ref:
                 ref = b_ref - a_ref * (b_ref - a_ref) / ref
@@ -173,28 +181,31 @@ class Obj3PIDBBController(BBController):
             return kp * err + ki * integ_err + kd * deriv_err - theta_offset
 
 
-def fit_pid(sim, setpoint, init_values=None, method=None, bounds=None):
+def fit_pid(sim, setpoint_list, init_values=None, method=None, bounds=None):
     """
-    Fonction permettant de faire une minimisation de la MSE pour un controleur PID et sur un
+    Fonction permettant de faire une minimisation de l'erreur pour un controleur PID et sur un
     simulateur donne. Le simulateur est de type 'BBSimulator'. La minimisation se fait pour
     une suite de 'setpoints' donnee et n'a donc pas un caractere "general".
-    :param sim         : Objet de type 'BBSimulator' qui gere la simulation du systeme.
-    :param setpoint    : Array de points de reference sur lesquels la minimisation s'appuye.
-    :param init_values : Valeurs initiales pour Kp, Ki et Kd. Prises au hasard si 'init_values'=None.
-    :param method      : Methode a utiliser. Voir la documentation de 'scipy.optimize.minimize'.
-    :param bounds      : Contraintes a utiliser sous forme d'une liste de paires (min, max).
+    :param sim           : Objet de type 'BBSimulator' qui gere la simulation du systeme.
+    :param setpoint_list : Liste d'array de points de reference (setpoints) sur lesquels la minimisation s'appuye.
+    :param init_values   : Valeurs initiales pour Kp, Ki et Kd. Prises au hasard si 'init_values'=None.
+    :param method        : Methode a utiliser. Voir la documentation de 'scipy.optimize.minimize'.
+    :param bounds        : Contraintes a utiliser sous forme d'une liste de paires (min, max).
                          Voir la documentation de 'scipy.optimize.minimize'.
-    :return            : Un objet 'OptimizeResult' issu de la minimisation.
+    :return              : Un objet 'OptimizeResult' issu de la minimisation.
     """
 
     def err_func(params):
-        # Fonction d'erreur calculant la MSE pour les parametres 'params'.
+        # Fonction d'erreur calculant l'erreur pour les parametres 'params'.
         kp, ki, kd = params
         cont = PIDBBController(sim, kp, ki, kd)
-        cont.simulate(setpoint, n_steps=setpoint.size)
-        mse = np.sum(np.power(np.absolute(setpoint - cont.sim.all_y[:n_steps].flatten()), 2)) / setpoint.size
-        print("Kp = {:010.6f}; Ki = {:010.6f}; Kd = {:010.6f}    MSE = {:015.11f}".format(kp, ki, kd, mse))
-        return mse
+        tot_err = 0
+        for setpoint in setpoint_list:
+            cont.simulate(setpoint, n_steps=setpoint.size)
+            tot_err += np.sum(np.absolute(setpoint - cont.sim.all_y[:n_steps].flatten())) / setpoint.size
+        print("Kp = {:010.6f}; Ki = {:010.6f}; Kd = {:010.6f}    mean error per setpoint = {:015.11f}"
+              "".format(kp, ki, kd, tot_err / len(setpoint_list)))
+        return tot_err
 
     if init_values is None:
         init_values = 5 * np.random.random(3)
@@ -211,24 +222,86 @@ if __name__ == "__main__":
     t = np.arange(0, 120, sim.dt)  # Simulation d'un certain nombre de secondes (2e argument)
     n_steps = t.size
 
-    # setpoint = np.full(t.shape, 0.25)  # Setpoint constant: "maintenir la bille a une position fixee"
-    setpoint = 0.3875 * np.sin(2 * np.pi * t / 15)  # Setpoint = sinus de periode 9s et d'amplitude 0.15m
-    # setpoint = 0.3875 * sig.square(2 * np.pi * t / 15)  # Setpoint = carre de periode 9s et d'amplitude 0.15m
-    # setpoint = 0.25 * np.sin(2 * np.pi * t / 9)  # Setpoint = carre de periode 9s et d'amplitude 0.15m
+    # Liste des setpoints sur lesquels on se base pour fit le PID.
+    # Le fit s'effectue sur un controleur depourvu d'idiot-proofing.
+    setpoints_to_fit = (
+        # Quelques trajectoires constantes:
+        np.zeros(t.shape),
+        # np.full(t.shape, -0.30),
+        np.full(t.shape, -0.20),
+        # np.full(t.shape, -0.10),
+        # np.full(t.shape, 0.10),
+        np.full(t.shape, 0.20),
+        # np.full(t.shape, 0.30),
+        # Quelques trajectoires sinusoidales:
+        # 0.1 * np.sin(2 * np.pi * t / 30),
+        # 0.2 * np.sin(2 * np.pi * t / 30),
+        # 0.3 * np.sin(2 * np.pi * t / 30),
+        # -0.1 * np.sin(2 * np.pi * t / 30),
+        # -0.2 * np.sin(2 * np.pi * t / 30),
+        # -0.3 * np.sin(2 * np.pi * t / 30),
+        # 0.1 * np.sin(2 * np.pi * t / 15),
+        0.2 * np.sin(2 * np.pi * t / 15),
+        # 0.3 * np.sin(2 * np.pi * t / 15),
+        -0.1 * np.sin(2 * np.pi * t / 15),
+        # -0.2 * np.sin(2 * np.pi * t / 15),
+        # -0.3 * np.sin(2 * np.pi * t / 15),
+        0.1 * np.sin(2 * np.pi * t / 9),
+        # 0.2 * np.sin(2 * np.pi * t / 9),
+        # 0.3 * np.sin(2 * np.pi * t / 9),
+        # -0.1 * np.sin(2 * np.pi * t / 9),
+        -0.2 * np.sin(2 * np.pi * t / 9),
+        # -0.3 * np.sin(2 * np.pi * t / 9),
+        # 0.1 * np.sin(2 * np.pi * t / 7),
+        # 0.2 * np.sin(2 * np.pi * t / 7),
+        # 0.3 * np.sin(2 * np.pi * t / 7),
+        # -0.1 * np.sin(2 * np.pi * t / 7),
+        # -0.2 * np.sin(2 * np.pi * t / 7),
+        # -0.3 * np.sin(2 * np.pi * t / 7),
+        # Quelques trajectoires carrees:
+        # 0.1 * sig.square(2 * np.pi * t / 30),
+        # 0.2 * sig.square(2 * np.pi * t / 30),
+        # 0.3 * sig.square(2 * np.pi * t / 30),
+        # -0.1 * sig.square(2 * np.pi * t / 30),
+        # -0.2 * sig.square(2 * np.pi * t / 30),
+        # -0.3 * sig.square(2 * np.pi * t / 30),
+        # 0.1 * sig.square(2 * np.pi * t / 15),
+        0.2 * sig.square(2 * np.pi * t / 15),
+        # 0.3 * sig.square(2 * np.pi * t / 15),
+        -0.1 * sig.square(2 * np.pi * t / 15),
+        # -0.2 * sig.square(2 * np.pi * t / 15),
+        # -0.3 * sig.square(2 * np.pi * t / 15),
+        0.1 * sig.square(2 * np.pi * t / 9),
+        # 0.2 * sig.square(2 * np.pi * t / 9),
+        # 0.3 * sig.square(2 * np.pi * t / 9),
+        # -0.1 * sig.square(2 * np.pi * t / 9),
+        -0.2 * sig.square(2 * np.pi * t / 9),
+        # -0.3 * sig.square(2 * np.pi * t / 9),
+        # 0.1 * sig.square(2 * np.pi * t / 7),
+        # 0.2 * sig.square(2 * np.pi * t / 7),
+        # 0.3 * sig.square(2 * np.pi * t / 7),
+        # -0.1 * sig.square(2 * np.pi * t / 7),
+        # -0.2 * sig.square(2 * np.pi * t / 7),
+        # -0.3 * sig.square(2 * np.pi * t / 7),
+    )
+
+    # setpoint = np.full(t.shape, 0.30)  # Setpoint constant: "maintenir la bille a une position fixee"
+    # setpoint = -0.30 * np.sin(2 * np.pi * t / 15)  # Setpoint = sinus
+    setpoint = 0.25 * sig.square(2 * np.pi * t / 100)  # Setpoint = carre
+    # setpoint = 0.25 * np.sin(2 * np.pi * t / 40)  # Setpoint = sinus
+
 
     # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID sur la reference 'setpoint'
     # et pour le simulateur 'sim'
-    # print(fit_pid(sim, setpoint, init_values=np.array([51.25805776, -0.21727106, 7.67898543]), method="Powell"))
-    # print(fit_pid(sim, setpoint, init_values=np.array([10.31712585,  0.49838698,  3.88553031]), method="L-BFGS-B",
-    #               bounds=((-20, 20), (-20, 20), (-20, 20))))
+    # print(fit_pid(sim, setpoints_to_fit, init_values=np.array([51.25805776, -0.21727106, 7.67898543]),
+    #               method="Powell"))
+    # print(fit_pid(sim, setpoints_to_fit, init_values=np.array([10.31712585,  0.49838698,  3.88553031]),
+    #               method="L-BFGS-B", bounds=((-20, 20), (-20, 20), (-20, 20))))
     # exit()
 
-    # Valeurs de parametres PID obtenues par optimisation
-    # cont = PIDBBController(sim, 20., -0.23170773, 20)
-    cont = Obj3PIDBBController(sim, 51.25805776, -0.21727106, 7.67898543)
-
-    # Valeurs de parametres PID obtenues pour un setpoint constant a 0.25m
-    # cont = PIDBBController(sim, 13.36836963,  0.22281434,  4.79696383)
+    # Valeurs de parametres PID obtenues par optimisation de l'erreur totale (lineaire, pas MSE)
+    # sur un mix de setpoints (constant/sinus/carre).
+    cont = Obj3PIDBBController(sim, 5.13051124e+01, -1.59963530e-02,  9.82885344e+00)
 
     cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0.2, -0.3]))
 
