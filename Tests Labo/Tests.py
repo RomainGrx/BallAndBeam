@@ -330,7 +330,8 @@ class Tests:
                 init_state[1] = (df.pos_cm[1] - df.pos_cm[0]) / bbsimulator.dt / 100
                 bbsimulator.simulate(lambda timestep, *args, **kwargs: np.deg2rad(df.theta_deg[timestep]),
                                      command_noise_func, output_noise_func, n_steps=df.shape[0], init_state=init_state)
-                partial_mse = np.sum(np.power(np.abs(bbsimulator.all_y[:df.shape[0]].flatten() - df.pos_cm / 100), 2))
+                # partial_mse = np.sum(np.power(np.abs(bbsimulator.all_y[:df.shape[0]].flatten() - df.pos_cm / 100), 2))
+                partial_mse = np.sum(np.abs(bbsimulator.all_y[:df.shape[0]].flatten() - df.pos_cm / 100))
                 tot_mse += partial_mse
 
             print("Parameters: {};    mean MSE per file: {}".format(np.round(param_values, 5),
@@ -345,6 +346,7 @@ class Tests:
 
 if __name__ == "__main__":
     from BBSimulators import BBThetaSimulator
+    import random
     import os
 
     # Creation du simulateur que l'on veut optimiser
@@ -362,35 +364,230 @@ if __name__ == "__main__":
 
     # Dossier de base contenant tous les fichiers de donnees experimentales
     # (et rien d'autre, sinon probleme avec la fonction 'Tests.update_decimal_sep_dir').
-    expdata_dir = "./Validation/Tests Output/"
+    expdata_dirs = {
+        "Nous": "./Validation/Tests Output/",                           # Groupe 4 (nous)
+        "FWlt": "../../All_Data_Exp_20200326/FW-Data_Exp/Outputs",       # Francois Wielant
+        "Gr 1": "../../All_Data_Exp_20200326/Group1-Data_Exp/Outputs",    # Groupe 1
+        "Gr 2": "../../All_Data_Exp_20200326/Group2-Data_Exp/Outputs",    # Groupe 2
+        "Gr 3": "../../All_Data_Exp_20200326/Group3-Data_Exp/Outputs",    # Groupe 3
+        "Gr 5": "../../All_Data_Exp_20200326/Group5-Data_Exp/Outputs",    # Groupe 5
+        "Gr 6": "../../All_Data_Exp_20200326/Group6-Data_Exp/Outputs",    # Groupe 6
+    }
+
+    datafiles = {
+        "Nous":
+            (
+                "test_1_-40_out.txt",
+                "test_1_0_out.txt",
+                "test_1_20_out.txt",
+                "test_2_0_20_out.txt",
+                "test_2_40_0_out.txt",
+                "test_3_10_5_out.txt",
+                "test_3_20_10_out.txt",
+                "test_3_20_10_out_edited.txt",
+                "test_3_20_5_out.txt",
+                "test_3_20_5_out_edited.txt",
+                "test_3_30_5_out.txt",
+                "test_3_40_5_out.txt",
+                "test_4_-30_30_10_2_out.txt",
+                "test_4_-30_30_10_2_out_nul.txt",
+                "test_4_-30_30_10_5_out.txt",
+                "test_4_-30_30_10_5_out_nul.txt",
+                "test_4_-40_40_10_2_out.txt",
+                "test_4_-40_40_10_2_out_nul.txt",
+                "test_4_-40_40_10_5_out.txt",
+                "test_4_-40_40_10_5_out_nul.txt",
+                "test_sinexp_1_out.txt",
+                "test_sinexp_5_out.txt",
+            ),
+        "FWlt":
+            (
+                "Data_TestCL_3_sines_1.txt.txt",
+                "Data_TestCL_3_sines_2.txt.txt",
+                "Data_TestCL_sine_A20cm_P50_1.txt.txt",
+                "Data_TestCL_sine_A20cm_P50_2.txt.txt",
+                "Data_TestCL_SmoothStep_A15cm_1.txt.txt",
+                "Data_TestCL_Step_1.txt.txt",
+                "Data_TestCL_traingles_1.txt.txt",
+                "Data_TestOL_2_sines_1.txt.txt",
+                "Data_TestOL_2_sines_2.txt.txt",
+                "Data_TestOL_3_sines_1.txt.txt",
+                "Data_TestOL_3_sines_2.txt.txt",
+                "Data_TestOL_sine_A10_P10_1.txt.txt",
+                "Data_TestOL_sine_A10_P10_2.txt.txt",
+                "Data_TestOL_triangles_1.txt.txt",
+            ),
+        "Gr 1":
+            (
+                "CL_test_1.txt",
+                "FC_test_1.txt",
+                "FC_test_2.txt",
+                "FC_test_3.txt",
+                "FC_test_4.txt",
+                "FC_test_5.txt",
+                "sin_10_002.txt",
+                "sin_10_005.txt",
+                "sin_10_0051.txt",
+                "sin_20_002.txt",
+                "sin_20_005.txt",
+                "sin_30_002.txt",
+                "sin_30_005.txt",
+                "sin_40_002.txt",
+                "sin_40_005.txt",
+                "square_10_20.txt",
+                "square_20_10.txt",
+                "square_20_20.txt",
+                "square_20_20_1.txt",
+                "square_20_5.txt",
+                "square_30_20.txt",
+                "square_40_10.txt",
+                "square_40_20.txt",
+            ),
+        "Gr 2":
+            (
+                "angles4sec.txt",
+                "test.txt.txt",
+                "TEST1.txt",
+                "TEST10.txt",
+                "TEST10_20_results.txt",
+                "test1_autre.txt",
+                "TEST1_results.txt",
+                "test2.txt",
+                "TEST2_autre.txt",
+                "test2_autre_autre.txt",
+                "test3.txt",
+                "TEST3_autre.txt",
+                "test4 .txt",
+                "TEST4.txt",
+                "TEST5.txt",
+                "TEST6.txt",
+                "TEST7.txt",
+                "TEST8.txt",
+                "TEST9.txt",
+                "testcommande.txt",
+                "testmax.txt",
+            ),
+        "Gr 3":
+            (
+                "FreeControl.0To-30.txt",
+                "FreeControl.0To40.txt",
+                "FreeControl.20.txt",
+                "FreeControl.30.txt",
+                "FreeControl.40.txt",
+                "FreeControl.7To17.txt",
+                "FreeControl.7To27.txt",
+                "FreeControl.7To37.txt",
+                "GrowingAngle10-15.txt",
+                "OpenLoop.20To-20.txt",
+                "OpenLoop.27To-13.txt",
+                "OpenLoop4.5.txt",
+                "PID.Kp20_Ki0.2_Kd2000.txt",
+                "PID.Kp2_Ki0.02_Kd300_20sec.txt",
+                "PID.Kp3_Ki0.03_Kd300.txt",
+                "PID.Kp3_Ki0.1_Kd300.txt",
+                "PID.Kp3_Ki0.2_Kd300.txt",
+                "PID.Kp3_Ki0.2_Kd300_20sec.txt",
+                "Sin.Amp10.txt",
+                "Sin.Amp30.txt",
+                "Stop.20.txt",
+                "Stop.30.txt",
+                "Test.15.txt",
+                "Test.20.txt",
+                "Test.30.txt",
+            ),
+        "Gr 5":
+            (
+                "accelerating_sine.txt",
+                "accelerating_sine_amax_80.txt",
+                "accelerratingsin_out_dx=2.txt",
+                "accel_sin_out_dx=2.txt",
+                "accel_sin_out_dx=6.txt",
+                "controller_kp1_20.txt",
+                "controller_kp1_squares.txt",
+                "controller_kp1_squares_slow.txt",
+                "data01.txt",
+                "data02.txt",
+                "data03.txt",
+                "data04.txt",
+                "data05.txt",
+                "data06.txt",
+                "data07.txt",
+                "data08.txt",
+                "data2.txt",
+                "data3.txt",
+                "manual_command.txt",
+                "random_stuff_out_dx=2.txt",
+                "scie_out_dx=2.txt",
+                "signalcarre_pos_1.txt",
+                "signalcarre_pos_2.txt",
+                "sin_out.txt",
+                "sin_out_dx=2.txt",
+                "smooth01.txt",
+                "smooth02.txt",
+                "squares_out_dx=2.txt",
+                "squares_slow_amax_80.txt",
+                "square_long_amax_80.txt",
+                "square_slow_amax80-2.txt",
+                "square_slow_amax80.txt",
+                "square_slow_kp0.75_ki0.1_kd0.1_windup20.txt",
+                "square_slow_kp0.75_ki0.1_kd0.1_windup20_amax80.txt",
+                "square_slow_kp0.75_ki0.1_kd0_windup20.txt",
+                "square_slow_kp0.75_ki0.3_kd0.txt",
+                "square_slow_kp0.75_ki0.3_kd0_windup15.txt",
+                "square_slow_kp0.75_ki0.3_kd0_windup20.txt",
+                "square_slow_kp0.75_ki0_kd0.txt",
+                "square_slow_kp0.75_ki0_kd0_amax200.txt",
+                "square_slow_kp0.75_ki0_kd0_amax80.txt",
+                "square_slow_kp1.5_ki0_kd0_amax80.txt",
+            ),
+        "Gr 6":
+            (
+                "test10_kp=1_Ki=0,1_Kd=0,0004_T=-20_12-3.txt",
+                "test11_kp=1_Ki=0,1_Kd=0,0004_T=-10_12-3.txt",
+                "Test1_20-02.txt",
+                "Test1_prim_20-02.txt",
+                "test1_T=-20_12-3.txt",
+                "test1_Target=10_5-3(Closed_loop).txt",
+                "Test2_20-02.txt",
+                "test2_27-2.txt",
+                "test2_T=-20_12-3.txt",
+                "Test3_20-02.txt",
+                "test3_27-2.txt",
+                "test3_T=-20_12-3.txt",
+                "Test4_20-02.txt",
+                "test4_T=-20_12-3.txt",
+                "test5_T=-20_12-3.txt",
+                "Test6_20-02.txt",
+                "test6_T=-20_12-3.txt",
+                "Test7_20-02.txt",
+                "test7_T=-20_12-3.txt",
+                "test8_12-3.txt",
+                "Test8_20-02.txt",
+                "Test8_prim2_20-02.txt",
+                "Test8_prim3_20-02.txt",
+                "Test8_prim4_20-02.txt",
+                "test9_Kd0.001_12-3.txt",
+                "test9_Kd=0,0002_T=-20_12-3.txt",
+                "test9_kp=1_Ki=0,1_Kd=0,0004_T=-20_12-3.txt",
+                "test9_T=-20_12-3.txt",
+                "test_stop_ball_fail_5-3(Open_loop).txt",
+                "video2_stop_ball_10-3.txt",
+                "video4.2_Target=10_10-3.txt",
+                "video4.3_0.9-0.1-0.0001_T=10_10-3.txt",
+                "video4.3_0.9-0.2-0.0001_T=10_10-3 (1).txt",
+                "video4.3_0.9-0.2-0.0001_T=10_10-3.txt",
+                "video4.4_0.9-0.2-0.0001_T=-10_10-3.txt",
+                "video4_T=10_10-3.txt",
+            )
+    }
+
+    expdata_dir = expdata_dirs["FWlt"]
+    datafile = datafiles["FWlt"][6]
 
     # Mettre a jour la representation des separateurs decimaux pour tous les fichiers
     # de donnees. Le changement sera applique a *tous* les fichiers contenus dans 'expdata_dir'.
     # (a ne faire qu'une fois).
     # Tests.update_decimal_sep_dir(expdata_dir)
-
-    # Ensemble des fichiers de donnees. A decommenter un a un pour verifier que les parametres
-    # qu'on a mis dans le simulateur donnent des bons resultats.
-    # datafile = "test_1_0_out.txt"
-    # datafile = "test_1_20_out.txt"
-    # datafile = "test_1_-40_out.txt"
-    # datafile = "test_2_0_20_out.txt"
-    # datafile = "test_2_40_0_out.txt"
-    # datafile = "test_3_10_5_out.txt"
-    # datafile = "test_3_20_5_out_edited.txt"
-    # datafile = "test_3_20_10_out_edited.txt"
-    # datafile = "test_3_30_5_out.txt"
-    # datafile = "test_3_40_5_out.txt"
-    # datafile = "test_4_-30_30_10_2_out.txt"
-    # datafile = "test_4_-30_30_10_2_out_nul.txt"  # Ignorer ce test: trop bizarre
-    # datafile = "test_4_-30_30_10_5_out.txt"
-    # datafile = "test_4_-30_30_10_5_out_nul.txt"  # Ignorer ce test: trop bizarre
-    # datafile = "test_4_-40_40_10_2_out.txt"
-    # datafile = "test_4_-40_40_10_2_out_nul.txt"  # Ignorer ce test: trop bizarre
-    # datafile = "test_4_-40_40_10_5_out.txt"
-    # datafile = "test_4_-40_40_10_5_out_nul.txt"  # Ignorer ce test: trop bizarre
-    datafile = "test_sinexp_1_out.txt"
-    # datafile = "test_sinexp_5_out.txt"
 
     # Affichage d'un graphe qui compare les vrais resultats experimentaux et les resultats de la
     # simulation pour le fichier 'datafile' choisi.
@@ -401,18 +598,32 @@ if __name__ == "__main__":
     if input("'y' pour lancer l'optimisation, autre touche pour terminer: ").lower() != "y":
         exit(0)
 
+    # Notes sur le training:
+    # Le resultat du training ne change pas vraiment (voire pas du tout) quand on ajoute les fichiers des
+    # autres groupes. La plupart des courbes sont suivies de maniere assez fidele, mais il en reste quelques
+    # unes qu'on rate completement (e.g. datafile #6 de FW). Soit on modifie le modele, soit on decide que
+    # c'est un cas suffisamment isole pour ne pas avoir besoin de faire ca.
+
     # Selection des fichiers de donnees experimentales que l'on s'autorise a utiliser pour optimiser
     # le simulateur. Il ne faut pas en choisir de trop, sinon on risque l'overfitting (c'est-a-dire que
     # le simulateur va "apprendre par coeur" les resultats experimentaux pour ces fichiers-la, mais ne
     # sera pas capable d'extrapoler pour des situations un peu differentes, ce qui n'est pas ideal).
-    training_data_files = [
-        "test_1_20_out.txt",
-        "test_2_0_20_out.txt",
-        "test_3_10_5_out.txt",
-        "test_3_20_5_out_edited.txt",
-        "test_4_-30_30_10_2_out.txt",
-        "test_sinexp_5_out.txt"
-    ]
+    # training_data_files = [
+    #     "test_1_20_out.txt",
+    #     "test_2_0_20_out.txt",
+    #     "test_3_10_5_out.txt",
+    #     "test_3_20_5_out_edited.txt",
+    #     "test_4_-30_30_10_2_out.txt",
+    #     "test_sinexp_5_out.txt"
+    # ]
+    # Utiliser un iterable normal et pas un generateur pour les 'training_paths', sinon probleme.
+    training_ratio = 0.75  # nb. fichiers de training / nb. tot. de fichiers = training_ratio (a peu pres)
+    training_data_paths = list()
+    for group in expdata_dirs.keys():
+        training_sample = random.choices(datafiles[group], k=int(training_ratio * len(datafiles[group])))
+        training_data_paths.extend(map(lambda file: os.path.join(expdata_dirs[group], file), training_sample))
+    print("TRAINING DATA:")
+    print("\n".join(training_data_paths))
 
     # Noms des parametres sur lesquels on veut effectuer l'optimisation. Ces noms correspondent
     # aux cles du dictionnaire 'params' du simulateur.
@@ -421,9 +632,6 @@ if __name__ == "__main__":
     # Dans le meme ordre que pour 'param_names', donner les bornes sur les valeurs des parametres.
     # Pour une borne non-specifiee, utiliser None.
     bounds = [(np.deg2rad(-20), np.deg2rad(20)), (0, None), (20 / 1000, 200 / 1000), (1e-06, 1e-02), (0, 5)]
-
-    # Utiliser un iterable normal et pas un generateur pour les 'training_paths', sinon probleme.
-    training_data_paths = tuple(map(lambda file: os.path.join(expdata_dir, file), training_data_files))
 
     # Lancement de l'optimisation (peut prendre un peu de temps).
     res = Tests.fit_bb_sim_params(training_data_paths, param_names, sim, bounds=bounds)
