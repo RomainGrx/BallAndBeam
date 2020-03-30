@@ -1,0 +1,4 @@
+-Stabilisation de la balle sur une position cible pour différente valeur de Kp,Ki et Kd
+-Problème rencontré:
+*La balle était cassé.
+*La caméra ne localisé pas précisément la ball.

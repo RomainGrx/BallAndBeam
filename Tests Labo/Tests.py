@@ -365,13 +365,13 @@ if __name__ == "__main__":
     # Dossier de base contenant tous les fichiers de donnees experimentales
     # (et rien d'autre, sinon probleme avec la fonction 'Tests.update_decimal_sep_dir').
     expdata_dirs = {
-        "Nous": "./Validation/Tests Output/",                           # Groupe 4 (nous)
-        "FWlt": "../../All_Data_Exp_20200326/FW-Data_Exp/Outputs",       # Francois Wielant
-        "Gr 1": "../../All_Data_Exp_20200326/Group1-Data_Exp/Outputs",    # Groupe 1
-        "Gr 2": "../../All_Data_Exp_20200326/Group2-Data_Exp/Outputs",    # Groupe 2
-        "Gr 3": "../../All_Data_Exp_20200326/Group3-Data_Exp/Outputs",    # Groupe 3
-        "Gr 5": "../../All_Data_Exp_20200326/Group5-Data_Exp/Outputs",    # Groupe 5
-        "Gr 6": "../../All_Data_Exp_20200326/Group6-Data_Exp/Outputs",    # Groupe 6
+        "Nous": "./Validation/Tests Output/",                             # Groupe 4 (nous)
+        "FWlt": "../All_Data_Exp_20200326/FW-Data_Exp/Outputs",        # Francois Wielant
+        "Gr 1": "../All_Data_Exp_20200326/Group1-Data_Exp/Outputs",    # Groupe 1
+        "Gr 2": "../All_Data_Exp_20200326/Group2-Data_Exp/Outputs",    # Groupe 2
+        "Gr 3": "../All_Data_Exp_20200326/Group3-Data_Exp/Outputs",    # Groupe 3
+        "Gr 5": "../All_Data_Exp_20200326/Group5-Data_Exp/Outputs",    # Groupe 5
+        "Gr 6": "../All_Data_Exp_20200326/Group6-Data_Exp/Outputs",    # Groupe 6
     }
 
     datafiles = {
@@ -581,6 +581,10 @@ if __name__ == "__main__":
             )
     }
 
+    # Keys possibles: "FWlt", "Nous", "Gr 1", "Gr 2", "Gr 3", "Gr 5", "Gr 6"
+    # Remplacer la key dans les deux lignes ci-dessous (doit etre la meme key dans le deux lignes)
+    # Remplacer l'indice numerique dans la deuxieme ligne ci-dessous par l'indice du fichier de donnees
+    # qu'on veut grapher.
     expdata_dir = expdata_dirs["FWlt"]
     datafile = datafiles["FWlt"][6]
 
@@ -608,15 +612,6 @@ if __name__ == "__main__":
     # le simulateur. Il ne faut pas en choisir de trop, sinon on risque l'overfitting (c'est-a-dire que
     # le simulateur va "apprendre par coeur" les resultats experimentaux pour ces fichiers-la, mais ne
     # sera pas capable d'extrapoler pour des situations un peu differentes, ce qui n'est pas ideal).
-    # training_data_files = [
-    #     "test_1_20_out.txt",
-    #     "test_2_0_20_out.txt",
-    #     "test_3_10_5_out.txt",
-    #     "test_3_20_5_out_edited.txt",
-    #     "test_4_-30_30_10_2_out.txt",
-    #     "test_sinexp_5_out.txt"
-    # ]
-    # Utiliser un iterable normal et pas un generateur pour les 'training_paths', sinon probleme.
     training_ratio = 0.75  # nb. fichiers de training / nb. tot. de fichiers = training_ratio (a peu pres)
     training_data_paths = list()
     for group in expdata_dirs.keys():
