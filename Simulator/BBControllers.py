@@ -120,6 +120,7 @@ class Obj3PIDBBController(BBController):
         #
         # Integrale de l'erreur avec le flag #0
         # Memorisation de l'erreur precedente avec le flag #2
+        # Memorisation de la position precedente avec le flag #3
 
         # Pour l'objectif 3, on a besoin de donner une petite vitesse a la balle
         # on utilise les flags 0 et 1 pour bypasser le controller sur les quelques premieres
@@ -139,39 +140,6 @@ class Obj3PIDBBController(BBController):
             kp, ki, kd = self.kp, self.ki, self.kd  # A hardcoder dans LabVIEW
             theta_offset = self.sim.params["theta_offset"]  # A hardcoder dans LabVIEW
 
-            if self.using_idiot_proofing:
-                # Idiot proofing:
-                # Entre a_pos et b_pos, on applique un angle qui varie lineairement entre alpha_a_pos et alpha_b_pos
-                # pour forcer une correction de la trajectoire. Le controle et ref sont bypasses dans ce cas.
-                a_pos = 0.35
-                b_pos = 0.775 / 2
-                alpha_a_pos, alpha_b_pos = np.deg2rad(20), np.deg2rad(49)
-                if pos > a_pos:
-                    return alpha_a_pos + (pos - a_pos) * (alpha_b_pos - alpha_a_pos) / (b_pos - a_pos) - theta_offset
-                elif pos < -a_pos:
-                    return -alpha_a_pos + (pos + a_pos) * (alpha_b_pos - alpha_a_pos) / (b_pos - a_pos) - theta_offset
-
-                # Si la reference est abberrante (i.e.: hors limites), on la bride une premiere fois.
-                # Faire ceci permet derelaxer un peu le reste de l'idiot-proofing afin de pouvoir s'approcher un peu
-                # plus des bords pour les trajectoires "normales" (i.e. pas hors limites).
-                if ref > 0.775 / 2:
-                    ref = 0.775 / 2
-                if ref < -0.775 / 2:
-                    ref = -0.775 / 2
-
-                # Si il n'y a pas lieu de faire une correction sur la position, mais qu'on voit que ref s'approche un peu
-                # trop violemment des limites a_pos et b_pos sur la position, alors on applique une correction de type
-                # "1/x" sur ref pour que la balle s'approche plus doucement des limites de position.
-                # La fonction de correction est telle que:
-                # f(a_ref) = a_ref; f(+inf) = b_ref; evolution de type 1/x entre les deux.
-                a_ref = 0.90 * a_pos
-                b_ref = 0.95 * a_pos
-                if ref > a_ref:
-                    ref = b_ref - a_ref * (b_ref - a_ref) / ref
-                if ref < -a_ref:
-                    ref = -b_ref - a_ref * (b_ref - a_ref) / ref
-                # Fin de l'idiot-proofing
-
             # Controle PID
             err = pos - ref
 
@@ -180,7 +148,40 @@ class Obj3PIDBBController(BBController):
             self.flags[2] = err
             integ_err = self.flags[0]
 
-            return kp * err + ki * integ_err + kd * deriv_err - theta_offset
+            raw_command = kp * err + ki * integ_err + kd * deriv_err - theta_offset
+            if not self.using_idiot_proofing:
+                return raw_command
+
+            # Idiot proofing
+            speed = (pos - self.flags[3]) / dt
+            self.flags[3] = pos
+            pos_lim = 0.35
+            buf_dist = 0.06
+            speed_lim = 0.025
+
+            # Gestion de la "zone 1": on fait sortir la bille de cette zone avec un angle plus ou moins grand
+            if abs(pos) > pos_lim:
+                # On adapte l'angle selon la necessite: on ne veut pas etre trop ferme, sinon ca va osciller
+                if np.sign(speed) == np.sign(pos):
+                    angle = np.deg2rad(49)
+                elif 0 <= abs(speed) <= speed_lim:
+                    angle = np.deg2rad(15) - (np.deg2rad(15) / speed_lim * abs(speed))
+                else:
+                    angle = 0
+                return np.sign(pos) * angle - theta_offset
+
+            # Gestion de la "zone 2": cette zone sert a freiner la bille mais aussi comme zone buffer pour eviter que
+            # le controleur et l'idiot-rpoofing se renvoient la bille sans cesse.
+            if pos_lim - buf_dist <= abs(pos) <= pos_lim and np.sign(raw_command) == -np.sign(pos):
+                if np.sign(speed) == np.sign(pos):
+                    # Freinage
+                    return np.sign(pos) * np.deg2rad(49) - theta_offset
+                else:
+                    # Buffer
+                    return 0 - theta_offset
+
+            # Si l'idiot proofing n'a pas ete utilise, on retourne juste l'angle du controleur.
+            return raw_command
 
 
 def fit_pid(sim, setpoint_list, init_values=None, method=None, bounds=None):
@@ -287,8 +288,8 @@ if __name__ == "__main__":
         -0.3 * sig.square(2 * np.pi * t / 7),
     )
 
-    # setpoint = np.full(t.shape, 0.30)  # Setpoint constant: "maintenir la bille a une position fixee"
-    # setpoint = -0.30 * np.sin(2 * np.pi * t / 15)  # Setpoint = sinus
+    # setpoint = np.full(t.shape, 0.56)  # Setpoint constant: "maintenir la bille a une position fixee" / 0.05):] = -0.35
+    # setpoint = -0.38 * np.sin(2 * np.pi * t / 15)  # Setpoint = sinus
     # setpoint = 0.50 * sig.square(2 * np.pi * t / 15)  # Setpoint = carre
     setpoint = 0.25 * np.sin(2 * np.pi * t / 9)  # Setpoint = sinus
 
@@ -308,7 +309,7 @@ if __name__ == "__main__":
     cont = Obj3PIDBBController(sim, 4.82231182e+01, 3.36682083e-03, 1.34785172e+01,     # Avec tout
                                using_idiot_proofing=True)
 
-    cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0.2, -0.3]))
+    cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0.35, -0]))
 
     fig, ((ax_pos), (ax_theta)) = plt.subplots(nrows=2, sharex=True)
     ax_pos.plot(t, setpoint, "ro--", linewidth=0.7, markersize=2, markevery=20, label="Setpoint [m]")

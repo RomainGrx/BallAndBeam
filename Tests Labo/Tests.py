@@ -271,6 +271,7 @@ class Tests:
         ax_pos.set_ylabel("Position [m]")
         ax_theta.set_ylabel("Angle [deg]")
         fig.suptitle(data_path if title is None else title, fontsize=14)
+        # fig.savefig("./All_Data_Images/{}.png".format(title))
         return fig, ax_pos, ax_theta
 
     @staticmethod
@@ -366,12 +367,12 @@ if __name__ == "__main__":
     # (et rien d'autre, sinon probleme avec la fonction 'Tests.update_decimal_sep_dir').
     expdata_dirs = {
         "Nous": "./Validation/Tests Output/",                             # Groupe 4 (nous)
-        "FWlt": "../All_Data_Exp_20200326/FW-Data_Exp/Outputs",        # Francois Wielant
-        "Gr 1": "../All_Data_Exp_20200326/Group1-Data_Exp/Outputs",    # Groupe 1
-        "Gr 2": "../All_Data_Exp_20200326/Group2-Data_Exp/Outputs",    # Groupe 2
-        "Gr 3": "../All_Data_Exp_20200326/Group3-Data_Exp/Outputs",    # Groupe 3
-        "Gr 5": "../All_Data_Exp_20200326/Group5-Data_Exp/Outputs",    # Groupe 5
-        "Gr 6": "../All_Data_Exp_20200326/Group6-Data_Exp/Outputs",    # Groupe 6
+        "FWlt": "./All_Data_Exp_20200326/FW-Data_Exp/Outputs",        # Francois Wielant
+        "Gr 1": "./All_Data_Exp_20200326/Group1-Data_Exp/Outputs",    # Groupe 1
+        "Gr 2": "./All_Data_Exp_20200326/Group2-Data_Exp/Outputs",    # Groupe 2
+        "Gr 3": "./All_Data_Exp_20200326/Group3-Data_Exp/Outputs",    # Groupe 3
+        "Gr 5": "./All_Data_Exp_20200326/Group5-Data_Exp/Outputs",    # Groupe 5
+        "Gr 6": "./All_Data_Exp_20200326/Group6-Data_Exp/Outputs",    # Groupe 6
     }
 
     datafiles = {
@@ -598,6 +599,12 @@ if __name__ == "__main__":
     data_path = os.path.join(expdata_dir, datafile)
     Tests.plot_bb_test_output_and_sim(data_path, sim, "Comparaison experience vs. simulation")
     plt.show()
+
+    # for key in expdata_dirs.keys():
+    #     for datafile in datafiles[key]:
+    #         data_path = os.path.join(expdata_dirs[key], datafile)
+    #         Tests.plot_bb_test_output_and_sim(data_path, sim, key + "_" + datafile)
+    # exit(42)
 
     if input("'y' pour lancer l'optimisation, autre touche pour terminer: ").lower() != "y":
         exit(0)
