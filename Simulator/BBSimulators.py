@@ -83,8 +83,14 @@ class BBAlphaSimulator(BBSimulator):
         m, x, g, r = self.params["m"], self.all_x[self.timestep], self.params["g"], self.params["r"]
         jb, alpha, dalpha_dt = self.params["jb"], self.all_u[self.timestep], self.dudt()
         rho, v, kf = self.params["rho"], self.params["v"], self.params["kf"]
+        ### <PRE-MODIF> ###
+        # dx1_dt = x[1]
+        # dx2_dt = (m * x[0] * dalpha_dt ** 2 - m * g * np.sin(alpha) - (rho * v * g + kf) * x[1]) / (jb / r ** 2 + m)
+        ### </PRE-MODIF> ###
+        ### <POST-MODIF> ###
         dx1_dt = x[1]
-        dx2_dt = (m * x[0] * dalpha_dt**2 - m * g * np.sin(alpha) - (rho * v * g + kf) * x[1]) / (jb / r**2 + m)
+        dx2_dt = (m * x[0] * dalpha_dt ** 2 - np.sin(alpha) * (m - rho * v) * g - kf * x[1]) / (jb / r ** 2 + m)
+        ### </POST-MODIF> ###
         return np.array([dx1_dt, dx2_dt])
 
     def update_state(self):
@@ -165,8 +171,14 @@ class BBThetaSimulator(BBAlphaSimulator):
         dalpha_dt = d * np.cos(theta) * self.dudt() / (l * np.sqrt(1 - (d * np.sin(theta) / l) ** 2))
         rho, v, kf, ff_pow = self.params["rho"], self.params["v"], self.params["kf"], self.params["ff_pow"]
         x1_pow = np.power(np.abs(x[1]), ff_pow) * np.sign(x[1])  # Laisser le abs sinon racines complexes
+        ### <PRE-MODIF> ###
+        # dx1_dt = x[1]
+        # dx2_dt = (m * x[0] * dalpha_dt ** 2 - m * g * np.sin(alpha) - (rho * v * g + kf) * x1_pow) / (jb / r ** 2 + m)
+        ### </PRE-MODIF> ###
+        ### <POST-MODIF> ###
         dx1_dt = x[1]
-        dx2_dt = (m * x[0] * dalpha_dt ** 2 - m * g * np.sin(alpha) - (rho * v * g + kf) * x1_pow) / (jb / r ** 2 + m)
+        dx2_dt = (m * x[0] * dalpha_dt ** 2 - np.sin(alpha) * (m - rho * v) * g - kf * x1_pow) / (jb / r ** 2 + m)
+        ### </POST-MODIF> ###
 
         # Gestion du frottement statique
         if abs(theta) + stat_spd_coeff * abs(dx1_dt) < stat_bound:
@@ -219,11 +231,13 @@ if __name__ == "__main__":
 
     # Fonction de bruit aleatoire (distribution uniforme) sur la commande.
     def my_command_noise_func(timestep, params, all_t, all_u, all_y, dt):
-        return (2 * np.random.random(1) - 1) * np.deg2rad(3)  # Erreur de +- 3deg a la commande du servo
+        return 0
+        # return (2 * np.random.random(1) - 1) * np.deg2rad(3)  # Erreur de +- 3deg a la commande du servo
 
     # Fonction de bruit aleatoire (distribution uniforme) sur la mesure de la position.
     def my_output_noise_func(timestep, params, all_t, all_u, all_y, dt):
-        return (2 * np.random.random(1) - 1) * 0.025  # Erreur de +- 2.5cm a la mesure
+        return 0
+        # return (2 * np.random.random(1) - 1) * 0.025  # Erreur de +- 2.5cm a la mesure
 
     # sim = BBSimpleSimulator(dt=0.05, buffer_size=1000)
     # sim = BBAlphaSimulator(dt=0.05, buffer_size=1000)

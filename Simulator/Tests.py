@@ -271,16 +271,16 @@ class Tests:
         ax_pos.set_ylabel("Position [m]")
         ax_theta.set_ylabel("Angle [deg]")
         fig.suptitle(data_path if title is None else title, fontsize=14)
-        # fig.savefig("./All_Data_Images/{}.png".format(title))
+        # fig.savefig("../Data/All_Data_Images/{}.png".format(title))
         return fig, ax_pos, ax_theta
 
     @staticmethod
-    def fit_bb_sim_params(training_data_paths, param_names, bbsimulator, method="SLSQP", bounds=None,
+    def fit_bb_sim_params(training_data_paths, param_names, bbsimulator, method="SLSQP", err_pow=1, bounds=None,
                           command_noise_func=lambda *args, **kwargs: 0, output_noise_func=lambda *args, **kwargs: 0):
         """
         Methode statique permettant d'optimiser les parametres 'param_names' du simulateur 'bbsimulator' afin
-        de minimiser la somme des erreurs quadratiques moyennes (MSE) sur l'ensemble des fichiers de donnees
-        experimentales dont les chemins sont contenus dans 'training_data_paths'.
+        de minimiser la somme des erreurs sur l'ensemble des fichiers de donnees experimentales dont les chemins sont
+        contenus dans 'training_data_paths'.
 
         Des bornes peuvent etre appliquees sur les valeurs des parametres. Elles sont a fournir sous forme
         d'une liste de tuples (min, max), dans le meme ordre que les parametres donnes dans 'param_names'.
@@ -293,7 +293,7 @@ class Tests:
         Note importante: les parametres de l'objet 'bbsimulator' sont modifies durant le processus, mais rien
                          ne garantit qu'ils soient optimals a la fin. Les parametres optimaux sont a lire
                          dans l'objet 'OptimizationResult' retourne par la fonction et sont a appliquer
-                         a la main si la MSE semble satisfaisante.
+                         a la main si l'erreur semble satisfaisante.
 
         :param training_data_paths : Liste des chemins vers les fichiers de donnees experimentales LabVIEW.
                                      Les separateurs decimaux doivent etre remplaes par des ".".
@@ -304,6 +304,8 @@ class Tests:
         :param bounds              : Liste de tuples (min, max) correspondant aux bornes imposees sur les
                                      parametres contenus dans 'param_names'. None represente une borne non
                                      specifiee.
+        :param err_pow             : Puissance a appliquer lors du calcul de l'erreur, permet de penaliser ou non les
+                                     grosses deviations par rapport aux petites.
         :param command_noise_func  : Fonction de bruit sur la commande telle qu'acceptee par la methode
                                      'bbsimulator.simulate'.
         :param output_noise_func   : Fonction de bruit sur la mesure telle qu'acceptee par la methode
@@ -312,17 +314,17 @@ class Tests:
         """
         def err_func(param_values):
             """
-            Fonction retournant la somme des MSE sur l'ensemble des fichiers de test. On desire minimiser
+            Fonction retournant la somme des erreurs sur l'ensemble des fichiers de test. On desire minimiser
             cette fonction. Elle est faite pour etre utilisee dans la fonction 'scipy.optimize.minimize'.
 
             :param param_values : Valeurs des parametres a utiliser, dans le meme ordre que 'param_names'.
-            :return             : La MSE totale.
+            :return             : L'erreur totale.
             """
             # Set les parametres
             for param_name, param_value in zip(param_names, param_values):
                 bbsimulator.params[param_name] = param_value
 
-            tot_mse = 0
+            tot_err = 0
             for data_path in training_data_paths:
                 df = pd.read_csv(data_path, sep="\t", index_col=0, skiprows=2, header=0, usecols=[0, 1, 2],
                                  names=["timestep", "theta_deg", "pos_cm"])
@@ -331,15 +333,16 @@ class Tests:
                 init_state[1] = (df.pos_cm[1] - df.pos_cm[0]) / bbsimulator.dt / 100
                 bbsimulator.simulate(lambda timestep, *args, **kwargs: np.deg2rad(df.theta_deg[timestep]),
                                      command_noise_func, output_noise_func, n_steps=df.shape[0], init_state=init_state)
-                # partial_mse = np.sum(np.power(np.abs(bbsimulator.all_y[:df.shape[0]].flatten() - df.pos_cm / 100), 2))
-                partial_mse = np.sum(np.abs(bbsimulator.all_y[:df.shape[0]].flatten() - df.pos_cm / 100))
-                tot_mse += partial_mse
+                partial_err = np.sum(np.power(np.abs(bbsimulator.all_y[:df.shape[0]].flatten() - df.pos_cm / 100),
+                                              err_pow))
+                tot_err += partial_err
 
-            print("Parameters: {};    mean MSE per file: {}".format(np.round(param_values, 5),
-                                                                    tot_mse / len(training_data_paths)))
-            return tot_mse
+            print("Parameters: {};    mean error per file: {}"
+                  "".format(np.round(param_values, 5), tot_err / len(training_data_paths)))
+            return tot_err
 
-        init_params = np.array([bbsimulator.params[param_name] for param_name in param_names])
+        # init_params = np.array([bbsimulator.params[param_name] for param_name in param_names])
+        init_params = np.random.random(len(param_names))  # Random = lutte contre les min locaux.
 
         # Methodes possibles avec 'bounds': "TNC", "L-BFGS-B", "SLSQP".
         return opt.minimize(err_func, init_params, method=method, bounds=bounds)
@@ -357,50 +360,31 @@ if __name__ == "__main__":
     # Ici, on peut modifier certains parametres du simulateur. C'est pratique quand
     # on veut appliquer des parametres issus d'une minimisation de l'erreur sans
     # forcement changer les valeurs par defaut dans les classes.
-    sim.params["theta_offset"] = -1.07698393e-01
-    sim.params["kf"] = 1.63537967e+01
-    sim.params["m"] = 1.39728756e-01
-    sim.params["jb"] = 8.29530009e-04
-    sim.params["ff_pow"] = 2.23113062e+00
+    # sim.params["theta_offset"] = -1.07698393e-01
+    # sim.params["kf"] = 1.63537967e+01
+    # sim.params["m"] = 1.39728756e-01
+    # sim.params["jb"] = 8.29530009e-04
+    # sim.params["ff_pow"] = 2.23113062e+00
+
+    # sim.params["theta_offset"] = -1.26051404e-01
+    # sim.params["kf"] = 7.23010488e+01
+    # sim.params["m"] = 1.77730376e-01
+    # sim.params["jb"] = 4.33764755e-03
+    # sim.params["ff_pow"] = 2.75959371e+00
 
     # Dossier de base contenant tous les fichiers de donnees experimentales
     # (et rien d'autre, sinon probleme avec la fonction 'Tests.update_decimal_sep_dir').
     expdata_dirs = {
-        "Nous": "./Validation/Tests Output/",                             # Groupe 4 (nous)
-        "FWlt": "./All_Data_Exp_20200326/FW-Data_Exp/Outputs",        # Francois Wielant
-        "Gr 1": "./All_Data_Exp_20200326/Group1-Data_Exp/Outputs",    # Groupe 1
-        "Gr 2": "./All_Data_Exp_20200326/Group2-Data_Exp/Outputs",    # Groupe 2
-        "Gr 3": "./All_Data_Exp_20200326/Group3-Data_Exp/Outputs",    # Groupe 3
-        "Gr 5": "./All_Data_Exp_20200326/Group5-Data_Exp/Outputs",    # Groupe 5
-        "Gr 6": "./All_Data_Exp_20200326/Group6-Data_Exp/Outputs",    # Groupe 6
+        "FWlt": "../Data/All_Data_Exp_20200326/FW-Data_Exp/Outputs",        # Francois Wielant
+        "Gr 1": "../Data/All_Data_Exp_20200326/Group1-Data_Exp/Outputs",    # Groupe 1
+        "Gr 2": "../Data/All_Data_Exp_20200326/Group2-Data_Exp/Outputs",    # Groupe 2
+        "Gr 3": "../Data/All_Data_Exp_20200326/Group3-Data_Exp/Outputs",    # Groupe 3
+        "Gr 4": "../Data/All_Data_Exp_20200326/Group4-Data_Exp/Outputs",    # Groupe 4 (Nous)
+        "Gr 5": "../Data/All_Data_Exp_20200326/Group5-Data_Exp/Outputs",    # Groupe 5
+        "Gr 6": "../Data/All_Data_Exp_20200326/Group6-Data_Exp/Outputs",    # Groupe 6
     }
 
     datafiles = {
-        "Nous":
-            (
-                "test_1_-40_out.txt",
-                "test_1_0_out.txt",
-                "test_1_20_out.txt",
-                "test_2_0_20_out.txt",
-                "test_2_40_0_out.txt",
-                "test_3_10_5_out.txt",
-                "test_3_20_10_out.txt",
-                "test_3_20_10_out_edited.txt",
-                "test_3_20_5_out.txt",
-                "test_3_20_5_out_edited.txt",
-                "test_3_30_5_out.txt",
-                "test_3_40_5_out.txt",
-                "test_4_-30_30_10_2_out.txt",
-                "test_4_-30_30_10_2_out_nul.txt",
-                "test_4_-30_30_10_5_out.txt",
-                "test_4_-30_30_10_5_out_nul.txt",
-                "test_4_-40_40_10_2_out.txt",
-                "test_4_-40_40_10_2_out_nul.txt",
-                "test_4_-40_40_10_5_out.txt",
-                "test_4_-40_40_10_5_out_nul.txt",
-                "test_sinexp_1_out.txt",
-                "test_sinexp_5_out.txt",
-            ),
         "FWlt":
             (
                 "Data_TestCL_3_sines_1.txt.txt",
@@ -496,6 +480,31 @@ if __name__ == "__main__":
                 "Test.20.txt",
                 "Test.30.txt",
             ),
+        "Gr 4":
+            (
+                "Objectif_3_Test1.txt",
+                "Objectif_3_Test12.txt",
+                "test_1_-40_out.txt",
+                "test_1_0_out.txt",
+                "test_1_20_out.txt",
+                "test_2_0_20_out.txt",
+                "test_2_40_0_out.txt",
+                "test_3_10_5_out.txt",
+                "test_3_20_10_out.txt",
+                "test_3_20_5_out.txt",
+                "test_3_30_5_out.txt",
+                "test_3_40_5_out.txt",
+                "test_4_-30_30_10_2_out.txt",
+                "test_4_-30_30_10_2_out_nul.txt",
+                "test_4_-30_30_10_5_out.txt",
+                "test_4_-30_30_10_5_out_nul.txt",
+                "test_4_-40_40_10_2_out.txt",
+                "test_4_-40_40_10_2_out_nul.txt",
+                "test_4_-40_40_10_5_out.txt",
+                "test_4_-40_40_10_5_out_nul.txt",
+                "test_sinexp_1_out.txt",
+                "test_sinexp_5_out.txt",
+            ),
         "Gr 5":
             (
                 "accelerating_sine.txt",
@@ -582,7 +591,7 @@ if __name__ == "__main__":
             )
     }
 
-    # Keys possibles: "FWlt", "Nous", "Gr 1", "Gr 2", "Gr 3", "Gr 5", "Gr 6"
+    # Keys possibles: "FWlt", "Gr 1", "Gr 2", "Gr 3", "Gr 4" (Nous), "Gr 5", "Gr 6"
     # Remplacer la key dans les deux lignes ci-dessous (doit etre la meme key dans le deux lignes)
     # Remplacer l'indice numerique dans la deuxieme ligne ci-dessous par l'indice du fichier de donnees
     # qu'on veut grapher.
@@ -619,7 +628,7 @@ if __name__ == "__main__":
     # le simulateur. Il ne faut pas en choisir de trop, sinon on risque l'overfitting (c'est-a-dire que
     # le simulateur va "apprendre par coeur" les resultats experimentaux pour ces fichiers-la, mais ne
     # sera pas capable d'extrapoler pour des situations un peu differentes, ce qui n'est pas ideal).
-    training_ratio = 0.75  # nb. fichiers de training / nb. tot. de fichiers = training_ratio (a peu pres)
+    training_ratio = 1.00  # nb. fichiers de training / nb. tot. de fichiers = training_ratio (a peu pres)
     training_data_paths = list()
     for group in expdata_dirs.keys():
         training_sample = random.choices(datafiles[group], k=int(training_ratio * len(datafiles[group])))
@@ -636,7 +645,8 @@ if __name__ == "__main__":
     bounds = [(np.deg2rad(-20), np.deg2rad(20)), (0, None), (20 / 1000, 200 / 1000), (1e-06, 1e-02), (0, 5)]
 
     # Lancement de l'optimisation (peut prendre un peu de temps).
-    res = Tests.fit_bb_sim_params(training_data_paths, param_names, sim, bounds=bounds)
+    res = Tests.fit_bb_sim_params(training_data_paths, param_names, sim, err_pow=2, bounds=bounds)
+    # res = Tests.fit_bb_sim_params(training_data_paths, param_names, sim, err_pow=2, bounds=None)
 
     # Affichage de l'OptimizeResult retourne. Les valeurs optimales et la MSE correspondante se trouvent
     # ici. On retrouve aussi un status indiquant si l'optimisation a echoue ou non. Pour tester ces valeurs
