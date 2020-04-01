@@ -359,7 +359,7 @@ if __name__ == "__main__":
     cont = Obj3PIDBBController(sim, 4.82231182e+01, 3.36682083e-03, 1.34785172e+01,     # Avec tout
                                using_idiot_proofing=True)
 
-    cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0.35, -0]))
+    cont.simulate(sepoint, n_steps=n_steps, init_state=np.array([0.35, -0]))
 
     fig, ((ax_pos), (ax_theta)) = plt.subplots(nrows=2, sharex=True)
     ax_pos.plot(t, setpoint, "ro--", linewidth=0.7, markersize=2, markevery=20, label="Setpoint [m]")
