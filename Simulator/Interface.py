@@ -18,19 +18,18 @@ def idiot_proof_test(x_init, u, flag_idiot_proof):
     :return                 : y [cm], l'evolution de l'etat du systeme
     """
     # Setup du simulateur et du controleur
-    kp, ki, kd = 5.13051124e+01, -1.59963530e-02,  9.82885344e+00
-    s = sim.BBThetaSimulator()
-    c = cont.Obj3PIDBBController(s, kp, ki, kd, bool(flag_idiot_proof))
+    s = sim.BBThetaSimulator(buffer_size=u.size + 1)
+    c = cont.FreeControlBBController(s, bool(flag_idiot_proof))
 
     # Conversion des unites (cm -> m; deg -> rad)
     x_init /= 100
-    # TODO: attention, peut-etre que u est une bete liste, il faut s'assurer d'en faire un ndarray.
+    u = np.deg2rad(u)
 
-    # TODO: debut d'implementation dans FreeControl (a supprimer si inutilise)
-    # TODO: cf. reponse a notre question sur le forum.
+    # Lancement de la simulation
+    c.simulate(u, n_steps=u.size, init_state=np.array([x_init, 0]))
 
-    # TODO: conversion unites!
-    return y
+    return s.all_y[:u.size] * 100
+
 
 def multiple_positions(x_init, x_desired):
     """
@@ -39,13 +38,9 @@ def multiple_positions(x_init, x_desired):
     :return          : 'y' est l'evolution de l'etat du systeme (position de la bille [cm]).
     """
 
-    # TODO: x_init est juste une position, PAS une vitesse initiale!
-    # TODO: transformer la "sequence de positions a tenir 1s chacune" en un vrai setpoint (1s = 20 * 0.05s)
-    # TODO: Attention aux conversions d'unites
-
     # Setup du simulateur et du controleur
     kp, ki, kd = 5.13051124e+01, -1.59963530e-02, 9.82885344e+00
-    s = sim.BBThetaSimulator()
+    s = sim.BBThetaSimulator(buffer_size=x_desired.size * 20 + 1)
     c = cont.Obj3PIDBBController(s, kp, ki, kd, using_idiot_proofing=True)
 
     # Conversion des unites (cm -> m; deg -> rad)
@@ -67,12 +62,27 @@ def multiple_positions(x_init, x_desired):
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
+    import scipy.signal as sig
 
-    # Test de la fonction d'interface 'multiple_positions'
-    x_init = 0
-    x_desired = np.repeat(np.arange(-45, 45 + 1, 5), 5)
-    y = multiple_positions(x_init, x_desired)
-    t = np.arange(0, x_desired.size, 0.05)
-    plt.plot(t, y, t, np.repeat(x_desired, 20))
-    plt.grid()
-    plt.show()
+    test_function = "idiot_proof_test"
+    # test_function = "multiple_positions"
+
+    if test_function == "idiot_proof_test":
+        # Test de la fonction d'interface 'idiot_proof_test'
+        x_init = 10
+        t = np.arange(0, 60, 0.05)
+        u = 40 * sig.square(2 * np.pi * t / 15, 0.5)
+        y = idiot_proof_test(x_init, u, flag_idiot_proof=True)
+        plt.plot(t, y, t, u)
+        plt.grid()
+        plt.show()
+
+    elif test_function == "multiple_positions":
+        # Test de la fonction d'interface 'multiple_positions'
+        x_init = 0
+        x_desired = np.repeat(np.arange(-45, 45 + 1, 5), 5)
+        y = multiple_positions(x_init, x_desired)
+        t = np.arange(0, x_desired.size, 0.05)
+        plt.plot(t, y, t, np.repeat(x_desired, 20))
+        plt.grid()
+        plt.show()

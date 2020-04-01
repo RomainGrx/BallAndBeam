@@ -71,6 +71,7 @@ class BBController(abc.ABC):
 class PIDBBController(BBController):
     """
     Classe qui implemente une loi de controle de type PID pour le systeme Ball and Beam du projet P4 MAP.
+    Aucun autre mecanisme n'est implemente ici: pas d'idiot-proofing, notamment.
     """
 
     def __init__(self, sim, kp, ki, kd):
@@ -101,6 +102,65 @@ class PIDBBController(BBController):
         return kp * err + ki * integ_err + kd * deriv_err - theta_offset
 
 
+class FreeControlBBController(BBController):
+    """
+    Classe qui permet d'implementer un 'free-control'. L'argument 'ref' de la methode 'control_law' est ici
+    utilise comme une commande de l'angle du moteur et pas comme un setpoint. Cette classe est utilisee pour
+    l'interface permettant le test de notre idiot-proofing.
+    """
+
+    def __init__(self, sim, using_idiot_proofing=True):
+        super().__init__(sim)
+        self.using_idiot_proofing = using_idiot_proofing
+
+    @Simulator.command_limiter(low_bound=np.deg2rad(-50), up_bound=np.deg2rad(50))
+    def control_law(self, ref, pos, dt, u_1, flags_1):
+        # Ici, 'ref' est directement redirige vers la commande, apres un passage dans l'idiot-proofing si
+        # ce mecanisme est active. 'ref' n'est donc PAS un setpoint, mais plutot un angle [rad] sur lequel
+        # l'offset doit encore etre applique.
+        # Memorisation de la position precedente avec le flag #3
+        self.flags = flags_1
+        theta_offset = self.sim.params["theta_offset"]  # A hardcoder dans LabVIEW
+        raw_command = ref - theta_offset
+
+        if not self.using_idiot_proofing:
+            return raw_command
+
+        # Idiot proofing
+        speed = (pos - self.flags[3]) / dt  # Calcul de la vitesse a l'aide du flag #3
+        self.flags[3] = pos  # Mise a jour du flag #3 pour l'iteration suivante
+        pos_lim = 0.35       # Delimitation de la "Bypass zone" (situee entre pos_lim et le bord)
+        buf_dist = 0.06      # Delimitation de la "Buffer zone" (buf_dist metres avant pos_lim)
+        speed_lim = 0.025    # Limite de vitesse autorisee dans la "Bypass zone"
+
+        # Gestion de la "Bypass zone": on fait sortir la bille de cette zone avec un angle plus ou moins grand
+        # Principe: on veut faire atterir la bille dans la buffer zone, donc d'abord on l'arrete, puis on la
+        # fait repartir avec une vitesse assez faible.
+        if abs(pos) > pos_lim:
+            # On adapte l'angle selon la necessite: on ne veut pas etre trop ferme, sinon ca va osciller
+            if np.sign(speed) == np.sign(pos):
+                angle = np.deg2rad(49)
+            elif 0 <= abs(speed) <= speed_lim:
+                angle = np.deg2rad(15) - (np.deg2rad(15) / speed_lim * abs(speed))
+            else:
+                angle = 0
+            return np.sign(pos) * angle - theta_offset
+
+        # Gestion de la "Buffer zone": cette zone sert a freiner la bille mais aussi comme zone buffer pour eviter que
+        # le controleur et l'idiot-rpoofing se renvoient la bille sans cesse.
+        # Note importante: Il n'y a une action de cette zone que quand la commande pousse la bille vers le bout du tube.
+        if pos_lim - buf_dist <= abs(pos) <= pos_lim and np.sign(raw_command) == -np.sign(pos):
+            if np.sign(speed) == np.sign(pos):
+                # Freinage
+                return np.sign(pos) * np.deg2rad(49) - theta_offset
+            else:
+                # Buffer
+                return 0 - theta_offset
+
+        # Si l'idiot proofing n'a pas effectue d'action particuliere, on retourne juste l'angle du controleur.
+        return raw_command
+
+
 class Obj3PIDBBController(BBController):
     """
     Classe qui implemente une loi de controle de type PID pour le systeme Ball and Beam du projet P4 MAP.
@@ -125,7 +185,7 @@ class Obj3PIDBBController(BBController):
 
         # Phase "controleur"
         # Parametres du PID:
-        kp, ki, kd = self.kp, self.ki, self.kd  # A hardcoder dans LabVIEW
+        kp, ki, kd = self.kp, self.ki, self.kd          # A hardcoder dans LabVIEW
         theta_offset = self.sim.params["theta_offset"]  # A hardcoder dans LabVIEW
 
         # Controle PID
@@ -211,8 +271,8 @@ if __name__ == "__main__":
     import scipy.signal as sig
     from BBSimulators import BBThetaSimulator
 
-    sim = BBThetaSimulator()
-    t = np.arange(0, 120, sim.dt)  # Simulation d'un certain nombre de secondes (2e argument)
+    t = np.arange(0, 120, 0.05)  # Simulation d'un certain nombre de secondes (2e argument)
+    sim = BBThetaSimulator(dt=0.05, buffer_size=t.size + 1)
     n_steps = t.size
 
     # Liste des setpoints sur lesquels on se base pour fit le PID.
