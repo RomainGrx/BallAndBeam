@@ -121,67 +121,57 @@ class Obj3PIDBBController(BBController):
         # Integrale de l'erreur avec le flag #0
         # Memorisation de l'erreur precedente avec le flag #2
         # Memorisation de la position precedente avec le flag #3
-
-        # Pour l'objectif 3, on a besoin de donner une petite vitesse a la balle
-        # on utilise les flags 0 et 1 pour bypasser le controller sur les quelques premieres
-        # iterations.
         self.flags = flags_1
-        if self.flags[0] == 0:
-            self.flags[0] = 1
-            self.flags[1] = 0#200  # On bypass le controle sur 200 iterations (10s)
 
-        if self.flags[0] == 1 and self.flags[1] > 0:
-            # Phase "d'initialisation"
-            self.flags[1] -= 1
-            return np.deg2rad(-30)
-        else:
-            # Phase "controleur"
-            # Parametres du PID:
-            kp, ki, kd = self.kp, self.ki, self.kd  # A hardcoder dans LabVIEW
-            theta_offset = self.sim.params["theta_offset"]  # A hardcoder dans LabVIEW
+        # Phase "controleur"
+        # Parametres du PID:
+        kp, ki, kd = self.kp, self.ki, self.kd  # A hardcoder dans LabVIEW
+        theta_offset = self.sim.params["theta_offset"]  # A hardcoder dans LabVIEW
 
-            # Controle PID
-            err = pos - ref
+        # Controle PID
+        err = pos - ref
+        deriv_err = (err - self.flags[2]) / dt
+        self.flags[0] += err * dt
+        self.flags[2] = err
+        integ_err = self.flags[0]
 
-            deriv_err = (err - self.flags[2]) / dt
-            self.flags[0] += err * dt
-            self.flags[2] = err
-            integ_err = self.flags[0]
-
-            raw_command = kp * err + ki * integ_err + kd * deriv_err - theta_offset
-            if not self.using_idiot_proofing:
-                return raw_command
-
-            # Idiot proofing
-            speed = (pos - self.flags[3]) / dt
-            self.flags[3] = pos
-            pos_lim = 0.35
-            buf_dist = 0.06
-            speed_lim = 0.025
-
-            # Gestion de la "zone 1": on fait sortir la bille de cette zone avec un angle plus ou moins grand
-            if abs(pos) > pos_lim:
-                # On adapte l'angle selon la necessite: on ne veut pas etre trop ferme, sinon ca va osciller
-                if np.sign(speed) == np.sign(pos):
-                    angle = np.deg2rad(49)
-                elif 0 <= abs(speed) <= speed_lim:
-                    angle = np.deg2rad(15) - (np.deg2rad(15) / speed_lim * abs(speed))
-                else:
-                    angle = 0
-                return np.sign(pos) * angle - theta_offset
-
-            # Gestion de la "zone 2": cette zone sert a freiner la bille mais aussi comme zone buffer pour eviter que
-            # le controleur et l'idiot-rpoofing se renvoient la bille sans cesse.
-            if pos_lim - buf_dist <= abs(pos) <= pos_lim and np.sign(raw_command) == -np.sign(pos):
-                if np.sign(speed) == np.sign(pos):
-                    # Freinage
-                    return np.sign(pos) * np.deg2rad(49) - theta_offset
-                else:
-                    # Buffer
-                    return 0 - theta_offset
-
-            # Si l'idiot proofing n'a pas ete utilise, on retourne juste l'angle du controleur.
+        raw_command = kp * err + ki * integ_err + kd * deriv_err - theta_offset
+        if not self.using_idiot_proofing:
             return raw_command
+
+        # Idiot proofing
+        speed = (pos - self.flags[3]) / dt  # Calcul de la vitesse a l'aide du flag #3
+        self.flags[3] = pos                 # Mise a jour du flag #3 pour l'iteration suivante
+        pos_lim = 0.35                      # Delimitation de la "Bypass zone" (situee entre pos_lim et le bord)
+        buf_dist = 0.06                     # Delimitation de la "Buffer zone" (buf_dist metres avant pos_lim)
+        speed_lim = 0.025                   # Limite de vitesse autorisee dans la "Bypass zone"
+
+        # Gestion de la "Bypass zone": on fait sortir la bille de cette zone avec un angle plus ou moins grand
+        # Principe: on veut faire atterir la bille dans la buffer zone, donc d'abord on l'arrete, puis on la
+        # fait repartir avec une vitesse assez faible.
+        if abs(pos) > pos_lim:
+            # On adapte l'angle selon la necessite: on ne veut pas etre trop ferme, sinon ca va osciller
+            if np.sign(speed) == np.sign(pos):
+                angle = np.deg2rad(49)
+            elif 0 <= abs(speed) <= speed_lim:
+                angle = np.deg2rad(15) - (np.deg2rad(15) / speed_lim * abs(speed))
+            else:
+                angle = 0
+            return np.sign(pos) * angle - theta_offset
+
+        # Gestion de la "Buffer zone": cette zone sert a freiner la bille mais aussi comme zone buffer pour eviter que
+        # le controleur et l'idiot-rpoofing se renvoient la bille sans cesse.
+        # Note importante: Il n'y a une action de cette zone que quand la commande pousse la bille vers le bout du tube.
+        if pos_lim - buf_dist <= abs(pos) <= pos_lim and np.sign(raw_command) == -np.sign(pos):
+            if np.sign(speed) == np.sign(pos):
+                # Freinage
+                return np.sign(pos) * np.deg2rad(49) - theta_offset
+            else:
+                # Buffer
+                return 0 - theta_offset
+
+        # Si l'idiot proofing n'a pas effectue d'action particuliere, on retourne juste l'angle du controleur.
+        return raw_command
 
 
 def fit_pid(sim, setpoint_list, init_values=None, method=None, bounds=None):
@@ -288,10 +278,10 @@ if __name__ == "__main__":
         -0.3 * sig.square(2 * np.pi * t / 7),
     )
 
-    # setpoint = np.full(t.shape, 0.56)  # Setpoint constant: "maintenir la bille a une position fixee" / 0.05):] = -0.35
-    # setpoint = -0.38 * np.sin(2 * np.pi * t / 15)  # Setpoint = sinus
+    # setpoint = np.full(t.shape, 0.56)  # Setpoint constant: "maintenir la bille a une position fixe" / 0.05):] = -0.35
+    # setpoint = -0.38 * np.sin(2 * np.pi * t / 15)     # Setpoint = sinus
     # setpoint = 0.50 * sig.square(2 * np.pi * t / 15)  # Setpoint = carre
-    setpoint = 0.25 * np.sin(2 * np.pi * t / 9)  # Setpoint = sinus
+    setpoint = 0.25 * np.sin(2 * np.pi * t / 9)       # Setpoint = sinus
 
 
     # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID sur la reference 'setpoint'
