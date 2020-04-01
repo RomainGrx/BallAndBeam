@@ -1,6 +1,0 @@
-Note importante:
-
-Il ne faut pas utiliser les mêmes tests pour le fitting du modèle et pour la validation de celui-ci.
-Sinon, il pourrait y avoir un phenomène d'overfitting (a.k.a. le modèle "apprend par coeur" les tests).
-
-Du coup, on doit faire le fitting avec 'Training Tests' et faire la validation avec 'Validation Tests'
