@@ -29,7 +29,7 @@ class BBSimulator(Simulator):
           Par exemple, un parametre 'm' superieur a 55.9g traduit le fait qu'il y a une masse d'eau qui affecte
           le deplacement de la bille, etc.
     """
-    def __init__(self, dt=0.05, buffer_size=100000):
+    def __init__(self, dt=0.05, buffer_size=10000):
         params = {
             "m": 1.39728756e-01,   # Masse de la bille [kg]
             "r": 30 / 1000,        # Rayon de la bille [m]
@@ -57,7 +57,7 @@ class BBSimpleSimulator(BBSimulator):
     et sans tenir compte des limites de la poutre (la poutre a une longueur "infinie"). La commande correspond a
     l'angle de la poutre (et donc pas du servo).
     """
-    def __init__(self, dt=0.05, buffer_size=100000):
+    def __init__(self, dt=0.05, buffer_size=10000):
         super().__init__(dt, buffer_size)
 
     def dxdt(self):
@@ -76,7 +76,7 @@ class BBAlphaSimulator(BBSimulator):
     (quand la balle arrive en bout de tube, elle bute). Le bridage de la commande ne depend pas de la classe mais
     de la fonction 'command_func' qui est passee en argument a 'simulate'.
     """
-    def __init__(self, dt=0.05, buffer_size=100000):
+    def __init__(self, dt=0.05, buffer_size=10000):
         super().__init__(dt, buffer_size)
 
     def dxdt(self):
@@ -150,7 +150,7 @@ class BBThetaSimulator(BBAlphaSimulator):
         Note: L'offset est pris en compte dans 'all_u'.
     """
 
-    def __init__(self, dt=0.05, buffer_size=100000):
+    def __init__(self, dt=0.05, buffer_size=10000):
         super().__init__(dt, buffer_size)
         # Parametre pour la gestion de l'offset de l'angle
         self.params["theta_offset"] = -1.07698393e-01  # Quand on commande theta = 0 deg, on aura theta = -6.17 deg

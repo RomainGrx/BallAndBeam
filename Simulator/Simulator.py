@@ -52,7 +52,7 @@ class Simulator(abc.ABC):
             return wrapper
         return decorator
 
-    def __init__(self, params, n_states, n_commands, n_outputs, dt=0.05, buffer_size=100000):
+    def __init__(self, params, n_states, n_commands, n_outputs, dt=0.05, buffer_size=10000):
         """
         Initialisation du simulateur.
 
@@ -205,7 +205,7 @@ if __name__ == "__main__":
 
     # Exemple avec le systeme y = x et dx/dt = exp(-x)
     class ExpSimulator(Simulator):
-        def __init__(self, dt=0.05, buffer_size=100000):
+        def __init__(self, dt=0.05, buffer_size=10000):
             n_states, n_commands, n_outputs = 1, 0, 1
             super().__init__(dict(), n_states, n_commands, n_outputs, dt, buffer_size)
 
