@@ -35,7 +35,6 @@ class BBSimulator(Simulator):
             "r": 30 / 1000,        # Rayon de la bille [m]
             "g": 9.81,             # Acceleration gravitationnelle a basse altitude [m/s^2]
             "rho": 1000,           # Masse volumique de l'eau [kg/m^3]
-            "cx": 0.47,            # Coefficient de frottement d'une sphere []
             "l": 0.775,            # Longueur de la poutre [m]
             "d": 55 / 1000,        # Longueur de la premiere barre attachee au servo [m]
             "b": 150 / 1000,       # Distance entre le pivot et le point d'attache du second bras du servo [m]
@@ -130,14 +129,14 @@ class BBThetaSimulator(BBAlphaSimulator):
         3) Il y a une gestion du frottement statique. Elle est modelisee avec deux parametres 'stat_bound' et
            'stat_spd_coeff', qui sont tels que la balle sera forcee a s'arreter quand la condition suivante est
            verifiee:
-               abs('theta') + 'stat_spd_coeff' * abs('speed') < stat_bound
+               abs('theta') + 'stat_spd_coeff' / 'stat_bound' * abs('speed') < 'stat_bound'
            Ces parametres s'interpretent ainsi:
                - Si la balle est a l'arret et que abs('theta') < 'stat_bound', alors la balle reste a l'arret;
-               - Si la valeur de 'stat_spd_coeff' est egale a 'stat_bound' / 'v', alors, a angle nul, la bille
-                 s'arretera quand la valeur absolue de sa vitesse est inferieure a 'v'.
+               - Si la valeur de 'stat_spd_coeff' est egale a 'v', alors, a angle nul, la bille s'arretera quand la
+                 valeur absolue de sa vitesse est inferieure a 'v'.
            Les valeurs par defaut de ces parametres sont obtenues de maniere experimentale:
                - 'stat_bound' = -7deg;
-               - 'stat_spd_coeff' = 'stat_bound' / 0.05.  (0.05 correspond a des m/s)
+               - 'stat_spd_coeff' = 0.05.  (0.05 correspond a des m/s)
 
         4) Il y a une gestion de la non-linearite des forces de frottement par rapport a la norme de la vitesse.
            On modelise cela avec un parametre 'ff_pow' dont la valeur par defaut est de 2.23113062e+00, suite a
@@ -157,7 +156,7 @@ class BBThetaSimulator(BBAlphaSimulator):
 
         # Parametres pour la simulation du frottement statique
         self.params["stat_bound"] = np.deg2rad(7)  # Vitesse nulle: la bille s'arrete quand abs(theta) < 7deg
-        self.params["stat_spd_coeff"] = self.params["stat_bound"] / 0.05  # A angle 0, la balle s'arrete si v < 0.05 m/s
+        self.params["stat_spd_coeff"] = 0.05  # A angle 0, la balle s'arrete si v < 0.05 m/s
 
         # Parametre pour la gestion de la non-linearite du frottement par rapport a la vitesse
         self.params["ff_pow"] = 2.23113062e+00  # Les frottements dependent de la vitesse**ff_pow
@@ -181,7 +180,7 @@ class BBThetaSimulator(BBAlphaSimulator):
         ### </POST-MODIF> ###
 
         # Gestion du frottement statique
-        if abs(theta) + stat_spd_coeff * abs(dx1_dt) < stat_bound:
+        if abs(theta) + stat_bound / stat_spd_coeff * abs(dx1_dt) < stat_bound:
             dx1_dt = 0
             dx2_dt = 0
 

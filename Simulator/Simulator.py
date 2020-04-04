@@ -203,7 +203,7 @@ class Simulator(abc.ABC):
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
-    # Exemple avec le systeme y = x et dx/dt = exp(-x)
+    # Exemple avec le systeme y = x et dx/dt = -x
     class ExpSimulator(Simulator):
         def __init__(self, dt=0.05, buffer_size=10000):
             n_states, n_commands, n_outputs = 1, 0, 1

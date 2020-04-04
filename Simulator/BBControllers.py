@@ -90,7 +90,7 @@ class PIDBBController(BBController):
         self.flags = flags_1  # Necessaire pour MathScript (sinon LabVIEW crash)
         # ref = pos
 
-        kp, ki, kd = self.kp, self.ki, self.kd  # A hardcoder dans LabVIEW
+        kp, ki, kd = self.kp, self.ki, self.kd          # A hardcoder dans LabVIEW
         theta_offset = self.sim.params["theta_offset"]  # A hardcoder dans LabVIEW
         err = pos - ref
 
@@ -261,7 +261,7 @@ def fit_pid(sim, setpoint_list, init_values=None, method=None, bounds=None):
         return tot_err
 
     if init_values is None:
-        init_values = 5 * np.random.random(3)
+        init_values = np.array([100, 0.01, 10]) * np.random.random(3)
 
     return opt.minimize(err_func, init_values, method=method, bounds=bounds)
 
@@ -338,28 +338,28 @@ if __name__ == "__main__":
         -0.3 * sig.square(2 * np.pi * t / 7),
     )
 
-    # setpoint = np.full(t.shape, 0.56)  # Setpoint constant: "maintenir la bille a une position fixe" / 0.05):] = -0.35
+    # setpoint = np.full(t.shape, 0.15)  # Setpoint constant: "maintenir la bille a une position fixe" / 0.05):] = -0.35
     # setpoint = -0.38 * np.sin(2 * np.pi * t / 15)     # Setpoint = sinus
-    # setpoint = 0.50 * sig.square(2 * np.pi * t / 15)  # Setpoint = carre
-    setpoint = 0.25 * np.sin(2 * np.pi * t / 9)       # Setpoint = sinus
-
+    setpoint = 0.25 * sig.square(2 * np.pi * t / 15)  # Setpoint = carre
+    # setpoint = 0.25 * np.sin(2 * np.pi * t / 9)       # Setpoint = sinus
 
     # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID sur la reference 'setpoint'
     # et pour le simulateur 'sim'
-    # print(fit_pid(sim, setpoints_to_fit, init_values=np.array([51.25805776, -0.21727106, 7.67898543]),
-    #               method="Powell"))
-    # print(fit_pid(sim, setpoints_to_fit, init_values=np.array([10.31712585,  0.49838698,  3.88553031]),
-    #               method="L-BFGS-B", bounds=((-20, 20), (-20, 20), (-20, 20))))
-    # exit()
+    print(fit_pid(sim, setpoints_to_fit, init_values=[1.93802569e+01, 9.23308796e-04, 5.38509190e+01], method="Powell"))
+    # print(fit_pid(sim, setpoints_to_fit, init_values=None,
+    #               method="SLSQP", bounds=((0, 300), (-1e-02, 1e-02), (0, 100))))
+    exit()
 
     # Valeurs de parametres PID obtenues par optimisation de l'erreur totale (lineaire, pas MSE)
     # sur un mix de setpoints (constant/sinus/carre).
     # cont = Obj3PIDBBController(sim, 5.13051124e+01, -1.59963530e-02, 9.82885344e+00,  # Avec un sous-ensemble
     #                            using_idiot_proofing=True)
-    cont = Obj3PIDBBController(sim, 4.82231182e+01, 3.36682083e-03, 1.34785172e+01,     # Avec tout
-                               using_idiot_proofing=True)
+    # cont = Obj3PIDBBController(sim, 4.82231182e+01, 3.36682083e-03, 1.34785172e+01,     # Avec tout (pre-modif)
+    #                            using_idiot_proofing=True)
+    cont = Obj3PIDBBController(sim, 1.93802569e+01, 9.23308796e-04, 5.38509190e+01,    # Avec tout (post-modif)
+                               using_idiot_proofing=False)
 
-    cont.simulate(sepoint, n_steps=n_steps, init_state=np.array([0.35, -0]))
+    cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0, 0]))
 
     fig, ((ax_pos), (ax_theta)) = plt.subplots(nrows=2, sharex=True)
     ax_pos.plot(t, setpoint, "ro--", linewidth=0.7, markersize=2, markevery=20, label="Setpoint [m]")

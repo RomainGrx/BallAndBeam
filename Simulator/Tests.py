@@ -271,12 +271,18 @@ class Tests:
         ax_pos.set_ylabel("Position [m]")
         ax_theta.set_ylabel("Angle [deg]")
         fig.suptitle(data_path if title is None else title, fontsize=14)
-        # fig.savefig("../Data/All_Data_Images/{}.png".format(title))
+
+        # <SAVEFIG> Decommenter pour sauvegarder l'image
+        fig.savefig("../Data/All_Data_Images_errpow2_80pct_staticfix/{}.png".format(title))
+        plt.close()
+        # </SAVEFIG>
+
         return fig, ax_pos, ax_theta
 
     @staticmethod
-    def fit_bb_sim_params(training_data_paths, param_names, bbsimulator, method="SLSQP", err_pow=1, bounds=None,
-                          command_noise_func=lambda *args, **kwargs: 0, output_noise_func=lambda *args, **kwargs: 0):
+    def fit_bb_sim_params(training_data_paths, param_names, bbsimulator, method="SLSQP", err_pow=2, init_params=None,
+                          bounds=None, tol=None, command_noise_func=lambda *args, **kwargs: 0,
+                          output_noise_func=lambda *args, **kwargs: 0):
         """
         Methode statique permettant d'optimiser les parametres 'param_names' du simulateur 'bbsimulator' afin
         de minimiser la somme des erreurs sur l'ensemble des fichiers de donnees experimentales dont les chemins sont
@@ -304,6 +310,8 @@ class Tests:
         :param bounds              : Liste de tuples (min, max) correspondant aux bornes imposees sur les
                                      parametres contenus dans 'param_names'. None represente une borne non
                                      specifiee.
+        :param tol                 : Tolerance pour l'optimiseur. Voir la documentation de 'scipy.optimize.minimize'
+                                     pour plus de details.
         :param err_pow             : Puissance a appliquer lors du calcul de l'erreur, permet de penaliser ou non les
                                      grosses deviations par rapport aux petites.
         :param command_noise_func  : Fonction de bruit sur la commande telle qu'acceptee par la methode
@@ -312,6 +320,9 @@ class Tests:
                                      'bbsimulator.simulate'.
         :return                    : Objet 'OptimizationResult' contenant le resultat de l'optimisation.
         """
+
+        # Memoization pour un leger speedup
+        already_seen = {}
         def err_func(param_values):
             """
             Fonction retournant la somme des erreurs sur l'ensemble des fichiers de test. On desire minimiser
@@ -320,6 +331,10 @@ class Tests:
             :param param_values : Valeurs des parametres a utiliser, dans le meme ordre que 'param_names'.
             :return             : L'erreur totale.
             """
+            key = tuple(param_values.tolist())
+            if key in already_seen.keys():
+                return already_seen[tuple(param_values.tolist())]
+
             # Set les parametres
             for param_name, param_value in zip(param_names, param_values):
                 bbsimulator.params[param_name] = param_value
@@ -337,21 +352,117 @@ class Tests:
                                               err_pow))
                 tot_err += partial_err
 
-            print("Parameters: {};    mean error per file: {}"
+            print("Parameters: {}\nMean error per file: {}\n"
                   "".format(np.round(param_values, 5), tot_err / len(training_data_paths)))
+
+            already_seen[key] = tot_err
             return tot_err
 
-        # init_params = np.array([bbsimulator.params[param_name] for param_name in param_names])
-        init_params = np.random.random(len(param_names))  # Random = lutte contre les min locaux.
+        # Gestion des parametres initiaux (accelere potentiellement le fit, mais il faut rester attentif a ne pas
+        # initialiser de maniere trop deterministe, sinon on court le risque de se coincer des le depart dans un
+        # minimum local).
+        if init_params is None:
+            # Le random permet de lutter contre les minimums locaux
+            init_params = np.random.uniform(-1, 1, size=len(param_names))
 
-        # Methodes possibles avec 'bounds': "TNC", "L-BFGS-B", "SLSQP".
-        return opt.minimize(err_func, init_params, method=method, bounds=bounds)
+        elif None in init_params:
+            for i, init_param in enumerate(init_params):
+                if init_param is None:
+                    init_params[i] = np.random.uniform(-1, 1)
+
+        # Si les bounds sont specifiees, on va mettre les parametres initiaux de maniere uniformement aleatoire
+        # entre les bounds et ce pour chaque parametre. (On part du principe que les bounds ont une structure
+        # correcte: un ensemble de couples (min, max))
+        if bounds is not None and (init_params is None or None in init_params):
+            for i, bound in enumerate(bounds):
+                if (init_params is None or init_params[i] is None) and bound[0] is not None and bound[1] is not None:
+                    init_params[i] = 0.5 * (bound[1] - bound[0]) * (1 + init_params[i])
+
+        # Methodes possibles avec 'bounds': "TNC", "L-BFGS-B", "SLSQP", "trust-constr"
+        return opt.minimize(err_func, np.array(init_params), method=method, bounds=bounds)
+
+    @staticmethod
+    def fit_static_friction(training_data_paths, bbsimulator, Ns=1000, err_pow=2,
+                            ranges = ((0, np.deg2rad(20)), (0.01, 0.20)), command_noise_func=lambda *args, **kwargs: 0,
+                            output_noise_func=lambda *args, **kwargs: 0):
+        """
+        Methode statique permettant d'optimiser les parametres 'stat_bound' et 'stat_spd_coeff' qui controlent le
+        frottement statique dans le simulateur 'bbsimulator'. Puisque le critere de frottement statique donne un
+        resultat binaire ("arreter la bille, oui ou non?"), on ne peut pas utiliser des methodes de fit qui se basent
+        sur le gradient de la fonction d'erreur, comme on le fait pour les autres parametres du simulateur. On effectue
+        donc un fit par force brute avec la fonction 'scipy.optimize.brute' (cf. doc). On essaye de minimiser la somme
+        des erreurs sur l'ensemble des fichiers de donnees experimentales dont les chemins sont contenus dans
+        'training_data_paths'.
+
+        Du bruit peut etre pris en compte dans la simulation avec les arguments 'command_noise_func' et
+        'output_noise_func', mais par defaut il n'y en a pas.
+
+        Note importante: les parametres de l'objet 'bbsimulator' sont modifies durant le processus, mais rien
+                         ne garantit qu'ils soient optimals a la fin. Les parametres optimaux sont a lire
+                         dans l'array retourne par la fonction et sont a appliquer a la main si l'erreur semble
+                         satisfaisante.
+
+        :param training_data_paths : Liste des chemins vers les fichiers de donnees experimentales LabVIEW.
+                                     Les separateurs decimaux doivent etre remplaes par des ".".
+        :param bbsimulator         : Objet de type 'BBSimulator' representant la modelisation du systeme et que
+                                     l'on desire optimiser.
+        :param Ns                  : Definit le raffinement de la grille de bruteforce utilisee: on testera 'Ns' valeurs
+                                     par parametre. Pour deux parametres, cela fait Ns^2 points en tout. Pour plus de
+                                     details, voir la documentation de 'scipy.optimize.brute'.
+        :param err_pow             : Puissance a appliquer lors du calcul de l'erreur, permet de penaliser ou non les
+                                     grosses deviations par rapport aux petites.
+        :param ranges              : Tuple de couples (min, max) qui definissent la zone de recherche de la brute force.
+                                     Voir la documentation de 'scipy.optimize.brute' pour plus de details.
+        :param command_noise_func  : Fonction de bruit sur la commande telle qu'acceptee par la methode
+                                     'bbsimulator.simulate'.
+        :param output_noise_func   : Fonction de bruit sur la mesure telle qu'acceptee par la methode
+                                     'bbsimulator.simulate'.
+        :return                    : Objet 'OptimizationResult' contenant le resultat de l'optimisation.
+        """
+
+        run_count = [1]  # Une liste comme ca err_func peut le modifier. Je sais, c'est sale, but it works ^^
+        tot_runs = Ns ** 2
+        def err_func(param_values):
+            """
+            Fonction retournant la somme des erreurs sur l'ensemble des fichiers de test. On desire minimiser
+            cette fonction. Elle est faite pour etre utilisee dans la fonction 'scipy.optimize.brute'.
+
+            :param param_values : Valeurs des parametres a utiliser, dans le meme ordre que 'param_names'.
+            :return             : L'erreur totale.
+            """
+            # Set les parametres
+            bbsimulator.params["stat_bound"] = param_values[0]
+            bbsimulator.params["stat_spd_coeff"] = param_values[1]
+
+            tot_err = 0
+            for data_path in training_data_paths:
+                df = pd.read_csv(data_path, sep="\t", index_col=0, skiprows=2, header=0, usecols=[0, 1, 2],
+                                 names=["timestep", "theta_deg", "pos_cm"])
+                init_state = np.zeros((2,))
+                init_state[0] = df.pos_cm[0] / 100
+                init_state[1] = (df.pos_cm[1] - df.pos_cm[0]) / bbsimulator.dt / 100
+                bbsimulator.simulate(lambda timestep, *args, **kwargs: np.deg2rad(df.theta_deg[timestep]),
+                                     command_noise_func, output_noise_func, n_steps=df.shape[0], init_state=init_state)
+                partial_err = np.sum(np.power(np.abs(bbsimulator.all_y[:df.shape[0]].flatten() - df.pos_cm / 100),
+                                              err_pow))
+                tot_err += partial_err
+
+            print("[Point {} of {}] Parameters: {};    mean error per file: {}"
+                  "".format(run_count[0], tot_runs, np.round(param_values, 5), tot_err / len(training_data_paths)))
+            run_count[0] += 1
+            return tot_err
+
+        # Ne pas utiliser plusieurs workers, sinon il y aura des race conditions sur l'objet 'bbsimulator'.
+        return opt.brute(err_func, ranges, Ns=Ns, finish=None, workers=1)
 
 
 if __name__ == "__main__":
     from BBSimulators import BBThetaSimulator
     import random
+    import time
     import os
+
+    np.set_printoptions(linewidth=200)  # Commenter si problemes d'affichage.
 
     # Creation du simulateur que l'on veut optimiser
     DT = 0.05
@@ -360,17 +471,20 @@ if __name__ == "__main__":
     # Ici, on peut modifier certains parametres du simulateur. C'est pratique quand
     # on veut appliquer des parametres issus d'une minimisation de l'erreur sans
     # forcement changer les valeurs par defaut dans les classes.
-    # sim.params["theta_offset"] = -1.07698393e-01
-    # sim.params["kf"] = 1.63537967e+01
-    # sim.params["m"] = 1.39728756e-01
-    # sim.params["jb"] = 8.29530009e-04
-    # sim.params["ff_pow"] = 2.23113062e+00
 
-    # sim.params["theta_offset"] = -1.26051404e-01
-    # sim.params["kf"] = 7.23010488e+01
-    # sim.params["m"] = 1.77730376e-01
-    # sim.params["jb"] = 4.33764755e-03
-    # sim.params["ff_pow"] = 2.75959371e+00
+    # A optimiser avec 'Tests.fit_bb_sim_params'
+    sim.params["theta_offset"] = -1.22168637e-01
+    sim.params["ff_pow"] = 1.57403518e+00
+    sim.params["m"] = 4.07577970e-01
+    sim.params["r"] = 4.50930559e-02
+    sim.params["g"] = 8.90574462e+01
+    sim.params["rho"] = 2.87279734e+00
+    sim.params["kf"] = 9.12765693e+01
+    sim.params["jb"] = 5.08989712e-02
+
+    # A optimiser avec 'Tests.fit_static_friction'
+    sim.params["stat_bound"] = 0.12272812
+    sim.params["stat_spd_coeff"] = 0.036
 
     # Dossier de base contenant tous les fichiers de donnees experimentales
     # (et rien d'autre, sinon probleme avec la fonction 'Tests.update_decimal_sep_dir').
@@ -595,8 +709,8 @@ if __name__ == "__main__":
     # Remplacer la key dans les deux lignes ci-dessous (doit etre la meme key dans le deux lignes)
     # Remplacer l'indice numerique dans la deuxieme ligne ci-dessous par l'indice du fichier de donnees
     # qu'on veut grapher.
-    expdata_dir = expdata_dirs["FWlt"]
-    datafile = datafiles["FWlt"][6]
+    # expdata_dir = expdata_dirs["FWlt"]
+    # datafile = datafiles["FWlt"][4]
 
     # Mettre a jour la representation des separateurs decimaux pour tous les fichiers
     # de donnees. Le changement sera applique a *tous* les fichiers contenus dans 'expdata_dir'.
@@ -605,18 +719,19 @@ if __name__ == "__main__":
 
     # Affichage d'un graphe qui compare les vrais resultats experimentaux et les resultats de la
     # simulation pour le fichier 'datafile' choisi.
-    data_path = os.path.join(expdata_dir, datafile)
-    Tests.plot_bb_test_output_and_sim(data_path, sim, "Comparaison experience vs. simulation")
-    plt.show()
+    # data_path = os.path.join(expdata_dir, datafile)
+    # Tests.plot_bb_test_output_and_sim(data_path, sim, "Comparaison experience vs. simulation")
+    # plt.show()
 
-    # for key in expdata_dirs.keys():
-    #     for datafile in datafiles[key]:
-    #         data_path = os.path.join(expdata_dirs[key], datafile)
-    #         Tests.plot_bb_test_output_and_sim(data_path, sim, key + "_" + datafile)
-    # exit(42)
+    for key in expdata_dirs.keys():
+        for datafile in datafiles[key]:
+            data_path = os.path.join(expdata_dirs[key], datafile)
+            Tests.plot_bb_test_output_and_sim(data_path, sim, key + "_" + datafile)
+            print('"{}" is done'.format(data_path))
+    exit(42)
 
-    if input("'y' pour lancer l'optimisation, autre touche pour terminer: ").lower() != "y":
-        exit(0)
+    # if input("'y' pour lancer l'optimisation, autre touche pour terminer: ").lower() != "y":
+    #     exit(0)
 
     # Notes sur le training:
     # Le resultat du training ne change pas vraiment (voire pas du tout) quand on ajoute les fichiers des
@@ -628,27 +743,48 @@ if __name__ == "__main__":
     # le simulateur. Il ne faut pas en choisir de trop, sinon on risque l'overfitting (c'est-a-dire que
     # le simulateur va "apprendre par coeur" les resultats experimentaux pour ces fichiers-la, mais ne
     # sera pas capable d'extrapoler pour des situations un peu differentes, ce qui n'est pas ideal).
-    training_ratio = 1.00  # nb. fichiers de training / nb. tot. de fichiers = training_ratio (a peu pres)
-    training_data_paths = list()
-    for group in expdata_dirs.keys():
-        training_sample = random.choices(datafiles[group], k=int(training_ratio * len(datafiles[group])))
-        training_data_paths.extend(map(lambda file: os.path.join(expdata_dirs[group], file), training_sample))
-    print("TRAINING DATA:")
-    print("\n".join(training_data_paths))
+    # training_ratio = 0.80  # nb. fichiers de training / nb. tot. de fichiers = training_ratio (a peu pres)
+    # training_data_paths = list()
+    # for group in expdata_dirs.keys():
+    #     training_sample = random.choices(datafiles[group], k=int(training_ratio * len(datafiles[group])))
+    #     training_data_paths.extend(map(lambda file: os.path.join(expdata_dirs[group], file), training_sample))
+    # print("TRAINING DATA:")
+    # print("\n".join(training_data_paths))
 
     # Noms des parametres sur lesquels on veut effectuer l'optimisation. Ces noms correspondent
     # aux cles du dictionnaire 'params' du simulateur.
-    param_names = ["theta_offset", "kf", "m", "jb", "ff_pow"]
+    # param_names = ["theta_offset", "ff_pow", "m", "r", "g", "rho", "kf", "jb"]
 
     # Dans le meme ordre que pour 'param_names', donner les bornes sur les valeurs des parametres.
-    # Pour une borne non-specifiee, utiliser None.
-    bounds = [(np.deg2rad(-20), np.deg2rad(20)), (0, None), (20 / 1000, 200 / 1000), (1e-06, 1e-02), (0, 5)]
+    # Pour une borne non-specifiee, utiliser None. Mettre des contraintes trop restrictives nuit au resultat
+    # de la minimisation, mais les mettre trop laxistes cree un grand espace de solutions possibles et augmente
+    # le temps necessaire a la terminaison de l'optimisation.
+    # bounds = [(np.deg2rad(-10), np.deg2rad(0)), (0, 5), (1 / 1000, 500 / 1000), (1 / 1000, 100 / 1000), (0, 100),
+    #           (0, 1e+06), (0, 1e+04), (1e-06, 1)]
+    # init_params = [None, None, None, None, None, None, None, None]
+    # init_params = [-1.22168637e-01, 1.57403518e+00, 4.07577970e-01, 4.50930559e-02, 8.90574462e+01, 2.87279734e+00,
+    #                9.12765693e+01, 5.08989712e-02]
+    # init_params = [-1.14874530e-01, 1.38364549e+00, 4.39093122e-01, 7.11838898e-02, 9.36217721e+01, 2.84114960e+00,
+    #                8.81027121e+01, 1.26007131e-01]
 
-    # Lancement de l'optimisation (peut prendre un peu de temps).
-    res = Tests.fit_bb_sim_params(training_data_paths, param_names, sim, err_pow=2, bounds=bounds)
-    # res = Tests.fit_bb_sim_params(training_data_paths, param_names, sim, err_pow=2, bounds=None)
+    # Lancement de l'optimisation (peut prendre un peu de temps). Parfois, plusieurs runs sont necessaires avant de
+    # trouver un minimum interessant.
+    # start_time = time.time()
+    # res = Tests.fit_bb_sim_params(training_data_paths, param_names, sim, method="SLSQP", err_pow=2, bounds=bounds,
+    #                               init_params=init_params)
+    # exec_time = time.time() - start_time
+
+    # Definition de la zone de recherche de la brute force:
+    # ranges = ((0.13636458 * 0.9, 0.13636458 * 1.1), (0.018 * 0.5, 0.018 * 2))
+    # ranges = ((0.12272812 * 0.9, 0.12272812 * 1.1), (0.036 * 0.9, 0.036 * 1.1))
+
+    # Lancement de l'optimisation des parametres de la friction statique par une methode de force brute.
+    # start_time = time.time()
+    # res = Tests.fit_static_friction(training_data_paths, sim, Ns=5, err_pow=2, ranges=ranges)
+    # exec_time = time.time() - start_time
 
     # Affichage de l'OptimizeResult retourne. Les valeurs optimales et la MSE correspondante se trouvent
     # ici. On retrouve aussi un status indiquant si l'optimisation a echoue ou non. Pour tester ces valeurs
     # il faut les remplacer a la main a l'endroit ci-dessus prevu a cet effet.
-    print(res)
+    # print(res)
+    # print("Fit completed in {} s".format(exec_time))
