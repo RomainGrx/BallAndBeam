@@ -256,20 +256,26 @@ def fit_pid(sim, setpoint_list, init_values=None, method=None, bounds=None):
         for setpoint in setpoint_list:
             cont.simulate(setpoint, n_steps=setpoint.size)
             tot_err += np.sum(np.absolute(setpoint - cont.sim.all_y[:n_steps].flatten())) / setpoint.size
-        print("Kp = {:010.6f}; Ki = {:010.6f}; Kd = {:010.6f}    mean error per setpoint = {:015.11f}"
-              "".format(kp, ki, kd, tot_err / len(setpoint_list)))
+        # print("Kp = {:010.6f}; Ki = {:010.6f}; Kd = {:010.6f}    mean error per setpoint = {:015.11f}"
+        #       "".format(kp, ki, kd, tot_err / len(setpoint_list)))
         return tot_err
 
     if init_values is None:
         init_values = np.array([100, 0.01, 10]) * np.random.random(3)
 
-    return opt.minimize(err_func, init_values, method=method, bounds=bounds)
+    minimizer_kwargs = {"method": method, "bounds": bounds, "options": {"disp": True},
+                        "callback": lambda xk: print("Params: {}\nMean error per setpoint: {}\n"
+                                                     "".format(xk, err_func(xk) / len(setpoint_list)))}
+    return opt.basinhopping(err_func, init_values, niter=50, minimizer_kwargs=minimizer_kwargs, disp=True,
+                            niter_success=7)
+    # return opt.minimize(err_func, init_values, method=method, bounds=bounds)
 
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import scipy.signal as sig
     from BBSimulators import BBThetaSimulator
+    import time
 
     t = np.arange(0, 120, 0.05)  # Simulation d'un certain nombre de secondes (2e argument)
     sim = BBThetaSimulator(dt=0.05, buffer_size=t.size + 1)
@@ -281,83 +287,93 @@ if __name__ == "__main__":
         # Quelques trajectoires constantes:
         np.zeros(t.shape),
         np.full(t.shape, -0.30),
-        np.full(t.shape, -0.20),
+        # np.full(t.shape, -0.20),
         np.full(t.shape, -0.10),
-        np.full(t.shape, 0.10),
+        # np.full(t.shape, 0.10),
         np.full(t.shape, 0.20),
-        np.full(t.shape, 0.30),
+        # np.full(t.shape, 0.30),
         # Quelques trajectoires sinusoidales:
-        0.1 * np.sin(2 * np.pi * t / 30),
-        0.2 * np.sin(2 * np.pi * t / 30),
-        0.3 * np.sin(2 * np.pi * t / 30),
-        -0.1 * np.sin(2 * np.pi * t / 30),
-        -0.2 * np.sin(2 * np.pi * t / 30),
-        -0.3 * np.sin(2 * np.pi * t / 30),
+        # 0.1 * np.sin(2 * np.pi * t / 30),
+        # 0.2 * np.sin(2 * np.pi * t / 30),
+        # 0.3 * np.sin(2 * np.pi * t / 30),
+        # -0.1 * np.sin(2 * np.pi * t / 30),
+        # -0.2 * np.sin(2 * np.pi * t / 30),
+        # -0.3 * np.sin(2 * np.pi * t / 30),
         0.1 * np.sin(2 * np.pi * t / 15),
-        0.2 * np.sin(2 * np.pi * t / 15),
+        # 0.2 * np.sin(2 * np.pi * t / 15),
         0.3 * np.sin(2 * np.pi * t / 15),
-        -0.1 * np.sin(2 * np.pi * t / 15),
+        # -0.1 * np.sin(2 * np.pi * t / 15),
         -0.2 * np.sin(2 * np.pi * t / 15),
-        -0.3 * np.sin(2 * np.pi * t / 15),
-        0.1 * np.sin(2 * np.pi * t / 9),
-        0.2 * np.sin(2 * np.pi * t / 9),
-        0.3 * np.sin(2 * np.pi * t / 9),
+        # -0.3 * np.sin(2 * np.pi * t / 15),
+        # 0.1 * np.sin(2 * np.pi * t / 9),
+        # 0.2 * np.sin(2 * np.pi * t / 9),
+        # 0.3 * np.sin(2 * np.pi * t / 9),
         -0.1 * np.sin(2 * np.pi * t / 9),
-        -0.2 * np.sin(2 * np.pi * t / 9),
-        -0.3 * np.sin(2 * np.pi * t / 9),
-        0.1 * np.sin(2 * np.pi * t / 7),
-        0.2 * np.sin(2 * np.pi * t / 7),
-        0.3 * np.sin(2 * np.pi * t / 7),
-        -0.1 * np.sin(2 * np.pi * t / 7),
-        -0.2 * np.sin(2 * np.pi * t / 7),
-        -0.3 * np.sin(2 * np.pi * t / 7),
+        # -0.2 * np.sin(2 * np.pi * t / 9),
+        # -0.3 * np.sin(2 * np.pi * t / 9),
+        # 0.1 * np.sin(2 * np.pi * t / 7),
+        # 0.2 * np.sin(2 * np.pi * t / 7),
+        # 0.3 * np.sin(2 * np.pi * t / 7),
+        # -0.1 * np.sin(2 * np.pi * t / 7),
+        # -0.2 * np.sin(2 * np.pi * t / 7),
+        # -0.3 * np.sin(2 * np.pi * t / 7),
         # Quelques trajectoires carrees:
-        0.1 * sig.square(2 * np.pi * t / 30),
-        0.2 * sig.square(2 * np.pi * t / 30),
-        0.3 * sig.square(2 * np.pi * t / 30),
-        -0.1 * sig.square(2 * np.pi * t / 30),
-        -0.2 * sig.square(2 * np.pi * t / 30),
-        -0.3 * sig.square(2 * np.pi * t / 30),
+        # 0.1 * sig.square(2 * np.pi * t / 30),
+        # 0.2 * sig.square(2 * np.pi * t / 30),
+        # 0.3 * sig.square(2 * np.pi * t / 30),
+        # -0.1 * sig.square(2 * np.pi * t / 30),
+        # -0.2 * sig.square(2 * np.pi * t / 30),
+        # -0.3 * sig.square(2 * np.pi * t / 30),
         0.1 * sig.square(2 * np.pi * t / 15),
-        0.2 * sig.square(2 * np.pi * t / 15),
+        # 0.2 * sig.square(2 * np.pi * t / 15),
         0.3 * sig.square(2 * np.pi * t / 15),
-        -0.1 * sig.square(2 * np.pi * t / 15),
+        # -0.1 * sig.square(2 * np.pi * t / 15),
         -0.2 * sig.square(2 * np.pi * t / 15),
-        -0.3 * sig.square(2 * np.pi * t / 15),
+        # -0.3 * sig.square(2 * np.pi * t / 15),
         0.1 * sig.square(2 * np.pi * t / 9),
-        0.2 * sig.square(2 * np.pi * t / 9),
-        0.3 * sig.square(2 * np.pi * t / 9),
-        -0.1 * sig.square(2 * np.pi * t / 9),
-        -0.2 * sig.square(2 * np.pi * t / 9),
-        -0.3 * sig.square(2 * np.pi * t / 9),
-        0.1 * sig.square(2 * np.pi * t / 7),
-        0.2 * sig.square(2 * np.pi * t / 7),
-        0.3 * sig.square(2 * np.pi * t / 7),
-        -0.1 * sig.square(2 * np.pi * t / 7),
-        -0.2 * sig.square(2 * np.pi * t / 7),
-        -0.3 * sig.square(2 * np.pi * t / 7),
+        # 0.2 * sig.square(2 * np.pi * t / 9),
+        # 0.3 * sig.square(2 * np.pi * t / 9),
+        # -0.1 * sig.square(2 * np.pi * t / 9),
+        # -0.2 * sig.square(2 * np.pi * t / 9),
+        # -0.3 * sig.square(2 * np.pi * t / 9),
+        # 0.1 * sig.square(2 * np.pi * t / 7),
+        # 0.2 * sig.square(2 * np.pi * t / 7),
+        # 0.3 * sig.square(2 * np.pi * t / 7),
+        # -0.1 * sig.square(2 * np.pi * t / 7),
+        # -0.2 * sig.square(2 * np.pi * t / 7),
+        # -0.3 * sig.square(2 * np.pi * t / 7),
     )
 
     # setpoint = np.full(t.shape, 0.15)  # Setpoint constant: "maintenir la bille a une position fixe" / 0.05):] = -0.35
-    # setpoint = -0.38 * np.sin(2 * np.pi * t / 15)     # Setpoint = sinus
-    setpoint = 0.25 * sig.square(2 * np.pi * t / 15)  # Setpoint = carre
-    # setpoint = 0.25 * np.sin(2 * np.pi * t / 9)       # Setpoint = sinus
+    # setpoint = 0.15 * np.sin(2 * np.pi * t / 12)     # Setpoint = sinus
+    setpoint = 0.15 * sig.square(2 * np.pi * t / 20)  # Setpoint = carre
+    # setpoint = 0.25 * np.sin(2 * np.pi * t / 15)       # Setpoint = sinus
 
     # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID sur la reference 'setpoint'
     # et pour le simulateur 'sim'
-    print(fit_pid(sim, setpoints_to_fit, init_values=[1.93802569e+01, 9.23308796e-04, 5.38509190e+01], method="Powell"))
+    # start_time = time.time()
+    # print(fit_pid(sim, setpoints_to_fit, init_values=None, method="BFGS"))
     # print(fit_pid(sim, setpoints_to_fit, init_values=None,
-    #               method="SLSQP", bounds=((0, 300), (-1e-02, 1e-02), (0, 100))))
-    exit()
+    #               method="SLSQP", bounds=((0, 200), (-1, 1), (0, 200))))
+    # exec_time = time.time() - start_time
+    # print("Fit completed in {} s".format(exec_time))
+    # exit()
 
     # Valeurs de parametres PID obtenues par optimisation de l'erreur totale (lineaire, pas MSE)
     # sur un mix de setpoints (constant/sinus/carre).
     # cont = Obj3PIDBBController(sim, 5.13051124e+01, -1.59963530e-02, 9.82885344e+00,  # Avec un sous-ensemble
-    #                            using_idiot_proofing=True)
+    #                            using_idiot_proofing=False)
     # cont = Obj3PIDBBController(sim, 4.82231182e+01, 3.36682083e-03, 1.34785172e+01,     # Avec tout (pre-modif)
-    #                            using_idiot_proofing=True)
-    cont = Obj3PIDBBController(sim, 1.93802569e+01, 9.23308796e-04, 5.38509190e+01,    # Avec tout (post-modif)
-                               using_idiot_proofing=False)
+    #                            using_idiot_proofing=False)
+    # cont = Obj3PIDBBController(sim, 1.93802569e+01, 9.23308796e-04, 5.38509190e+01,    # Avec tout (post-modif)
+    #                            using_idiot_proofing=False)
+    # cont = Obj3PIDBBController(sim, 1.89627011e+01, 2.94571230e-02, 8.97916098e+01,    # Avec tout (post-modif)
+    #                            using_idiot_proofing=False)
+    # cont = Obj3PIDBBController(sim, 1.91698000e+01, 7.84829820e-02, 7.94643627e+01,    # Avec tout (post-modif)
+    #                            using_idiot_proofing=False)
+    cont = Obj3PIDBBController(sim, 3.28299695e+01, -1.31468554e-02,  4.26750713e+01,  # Avec tout (post-modif)
+                               using_idiot_proofing=True)
+
 
     cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0, 0]))
 
