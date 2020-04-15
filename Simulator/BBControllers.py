@@ -6,7 +6,12 @@
 import numpy as np
 import scipy.optimize as opt
 import abc
+import time
+import matplotlib.pyplot as plt
+import scipy.signal as sig
+
 from Simulator import Simulator
+from BBSimulators import BBThetaSimulator
 
 
 class BBController(abc.ABC):
@@ -268,19 +273,33 @@ def fit_pid(sim, setpoint_list, init_values=None, method=None, bounds=None):
                                                      "".format(xk, err_func(xk) / len(setpoint_list)))}
     return opt.basinhopping(err_func, init_values, niter=50, minimizer_kwargs=minimizer_kwargs, disp=True,
                             niter_success=7)
-    # return opt.minimize(err_func, init_values, method=method, bounds=bounds)
 
 
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    import scipy.signal as sig
-    from BBSimulators import BBThetaSimulator
-    import time
+def plot_simulation(t, n_steps, sim, setpoint):
+    fig, ((ax_pos), (ax_theta)) = plt.subplots(nrows=2, sharex=True)
+    ax_pos.plot(t, setpoint, "ro--", linewidth=0.7, markersize=2, markevery=20, label="Setpoint [m]")
+    ax_pos.plot(t, sim.all_y[:n_steps], "k-", label="Position [m]")
+    ax_pos.plot(t, sim.all_y[:n_steps].flatten() - setpoint, "m--", linewidth=0.7, label="Error [m]")
+    ax_pos.plot(t, np.full(t.shape, 0.775 / 2), color="grey", linestyle="--", linewidth=1, label="Bounds")
+    ax_pos.plot(t, np.full(t.shape, -0.775 / 2), color="grey", linestyle="--", linewidth=1)
+    ax_theta.plot(t, np.rad2deg(sim.all_u[:n_steps] - sim.params["theta_offset"]), color="navy",
+                  linestyle="--", linewidth=0.7, label="Commanded angle [deg]")
+    # ax_theta.plot(t, np.rad2deg(sim.all_u[:n_steps]), color="darkturquoise", linestyle="-",
+    #               label="Actual offset angle [deg]")
+    ax_theta.plot(t, np.full(t.shape, -50), color="grey", linestyle="--", linewidth=1)
+    ax_theta.plot(t, np.full(t.shape, 50), color="grey", linestyle="--", linewidth=1)
+    # ax_pos.legend()
+    # ax_theta.legend()
+    fig.legend(loc="right")
+    ax_pos.grid()
+    ax_theta.grid()
+    ax_pos.set_xlabel("Time [s]")
+    ax_pos.set_ylabel("Position [m]")
+    ax_theta.set_xlabel("Time [s]")
+    ax_theta.set_ylabel("Angle [deg]")
 
-    t = np.arange(0, 120, 0.05)  # Simulation d'un certain nombre de secondes (2e argument)
-    sim = BBThetaSimulator(dt=0.05, buffer_size=t.size + 1)
-    n_steps = t.size
 
+def launch_fit_pid(sim):
     # Liste des setpoints sur lesquels on se base pour fit le PID.
     # Le fit s'effectue sur un controleur depourvu d'idiot-proofing.
     setpoints_to_fit = (
@@ -344,58 +363,35 @@ if __name__ == "__main__":
         # -0.3 * sig.square(2 * np.pi * t / 7),
     )
 
-    # setpoint = np.full(t.shape, 0.15)  # Setpoint constant: "maintenir la bille a une position fixe" / 0.05):] = -0.35
-    # setpoint = 0.15 * np.sin(2 * np.pi * t / 12)     # Setpoint = sinus
-    setpoint = 0.15 * sig.square(2 * np.pi * t / 20)  # Setpoint = carre
-    # setpoint = 0.25 * np.sin(2 * np.pi * t / 15)       # Setpoint = sinus
 
-    # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID sur la reference 'setpoint'
-    # et pour le simulateur 'sim'
-    # start_time = time.time()
-    # print(fit_pid(sim, setpoints_to_fit, init_values=None, method="BFGS"))
+    start_time = time.time()
+    print(fit_pid(sim, setpoints_to_fit, init_values=None, method="BFGS"))
     # print(fit_pid(sim, setpoints_to_fit, init_values=None,
     #               method="SLSQP", bounds=((0, 200), (-1, 1), (0, 200))))
-    # exec_time = time.time() - start_time
-    # print("Fit completed in {} s".format(exec_time))
+    exec_time = time.time() - start_time
+    print("Fit completed in {} s".format(exec_time))
+
+
+if __name__ == "__main__":
+    t = np.arange(0, 120, 0.05)  # Simulation d'un certain nombre de secondes (cf. 2e argument)
+    sim = BBThetaSimulator(dt=0.05, buffer_size=t.size + 1)
+    n_steps = t.size
+
+    # setpoint = np.full(t.shape, 0.15)                 # Setpoint constant
+    # setpoint = 0.15 * np.sin(2 * np.pi * t / 12)      # Setpoint = sinus
+    setpoint = 0.15 * sig.square(2 * np.pi * t / 20)  # Setpoint = carre
+    # setpoint = 0.25 * np.sin(2 * np.pi * t / 15)      # Setpoint = sinus
+
+    # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID
+    # launch_fit_pid(sim)
     # exit()
 
     # Valeurs de parametres PID obtenues par optimisation de l'erreur totale (lineaire, pas MSE)
     # sur un mix de setpoints (constant/sinus/carre).
-    # cont = Obj3PIDBBController(sim, 5.13051124e+01, -1.59963530e-02, 9.82885344e+00,  # Avec un sous-ensemble
-    #                            using_idiot_proofing=False)
-    # cont = Obj3PIDBBController(sim, 4.82231182e+01, 3.36682083e-03, 1.34785172e+01,     # Avec tout (pre-modif)
-    #                            using_idiot_proofing=False)
-    # cont = Obj3PIDBBController(sim, 1.93802569e+01, 9.23308796e-04, 5.38509190e+01,    # Avec tout (post-modif)
-    #                            using_idiot_proofing=False)
-    # cont = Obj3PIDBBController(sim, 1.89627011e+01, 2.94571230e-02, 8.97916098e+01,    # Avec tout (post-modif)
-    #                            using_idiot_proofing=False)
-    # cont = Obj3PIDBBController(sim, 1.91698000e+01, 7.84829820e-02, 7.94643627e+01,    # Avec tout (post-modif)
-    #                            using_idiot_proofing=False)
-    cont = Obj3PIDBBController(sim, 3.28299695e+01, -1.31468554e-02,  4.26750713e+01,  # Avec tout (post-modif)
-                               using_idiot_proofing=True)
-
+    kp, ki, kd = 3.28299695e+01, -1.31468554e-02,  4.26750713e+01
+    cont = Obj3PIDBBController(sim, kp, ki, kd, using_idiot_proofing=True)
 
     cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0, 0]))
 
-    fig, ((ax_pos), (ax_theta)) = plt.subplots(nrows=2, sharex=True)
-    ax_pos.plot(t, setpoint, "ro--", linewidth=0.7, markersize=2, markevery=20, label="Setpoint [m]")
-    ax_pos.plot(t, sim.all_y[:n_steps], "k-", label="Position [m]")
-    ax_pos.plot(t, sim.all_y[:n_steps].flatten() - setpoint, "m--", linewidth=0.7, label="Error [m]")
-    ax_pos.plot(t, np.full(t.shape, 0.775 / 2), color="grey", linestyle="--", linewidth=1, label="Bounds")
-    ax_pos.plot(t, np.full(t.shape, -0.775 / 2), color="grey", linestyle="--", linewidth=1)
-    ax_theta.plot(t, np.rad2deg(sim.all_u[:n_steps] - sim.params["theta_offset"]), color="navy",
-                  linestyle="--", linewidth=0.7, label="Commanded angle [deg]")
-    # ax_theta.plot(t, np.rad2deg(sim.all_u[:n_steps]), color="darkturquoise", linestyle="-",
-    #               label="Actual offset angle [deg]")
-    ax_theta.plot(t, np.full(t.shape, -50), color="grey", linestyle="--", linewidth=1)
-    ax_theta.plot(t, np.full(t.shape, 50), color="grey", linestyle="--", linewidth=1)
-    # ax_pos.legend()
-    # ax_theta.legend()
-    fig.legend(loc="right")
-    ax_pos.grid()
-    ax_theta.grid()
-    ax_pos.set_xlabel("Time [s]")
-    ax_pos.set_ylabel("Position [m]")
-    ax_theta.set_xlabel("Time [s]")
-    ax_theta.set_ylabel("Angle [deg]")
+    plot_simulation(t, n_steps, sim, setpoint)
     plt.show()
