@@ -60,12 +60,40 @@ def multiple_positions(x_init, x_desired):
     return y
 
 
+def multiple_positions_avec_contraintes(x_init, x_1, x_2, v_max, v_min):
+    """
+    :param x_init : Position initiale de la bille [cm]
+    :param x_1    : Position de debut de la trajectoire a effectuer [cm]
+    :param x_2    : Position de fin de la trajectoire a effectuer [cm]
+    :param v_max  : Vitesse maximale sur la trajectoire [cm/s]
+    :param v_min  : Vitesse minimale sur la trajectoire [cm/s]
+    :return       : Evolution de l'etat du systeme (position de la bille [cm])
+    """
+    # Conversion des unites
+    x_init, x_1, x_2, v_min, v_max = x_init / 100, x_1 / 100, x_2 / 100, v_min / 100, v_max / 100
+
+    # Setup du simulateur et du
+    t = np.arange(0, 25, 0.05)  # 25s a semble suffisant pour n'importe quelle trajectoire
+    n_steps = t.size
+    s = sim.BBThetaSimulator(buffer_size=n_steps + 1)
+    c = cont.Obj7Controller(s, np.deg2rad(50), x_1, x_2, v_min, v_max, using_idiot_proofing=True)
+
+    # Lancement de la simulation
+    c.simulate(np.empty(t.shape), n_steps=n_steps, init_state=np.array([x_init, 0]))
+
+    # Recuperation de la sortie et conversion m -> cm
+    y = s.all_y[:n_steps] * 100
+
+    return y
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import scipy.signal as sig
 
-    test_function = "idiot_proof_test"
+    # test_function = "idiot_proof_test"
     # test_function = "multiple_positions"
+    test_function = "multiple_positions_avec_contraintes"
 
     if test_function == "idiot_proof_test":
         # Test de la fonction d'interface 'idiot_proof_test'
@@ -84,5 +112,17 @@ if __name__ == "__main__":
         y = multiple_positions(x_init, x_desired)
         t = np.arange(0, x_desired.size, 0.05)
         plt.plot(t, y, t, np.repeat(x_desired, 20))
+        plt.grid()
+        plt.show()
+
+    elif test_function == "multiple_positions_avec_contraintes":
+        # Test de la fonction d'interface 'multiple_positions'
+        x_init = -10
+        x_1, x_2, v_min, v_max = 20, -5, 3, 4
+        y = multiple_positions_avec_contraintes(x_init, x_1, x_2, v_max, v_min)
+        t = np.arange(0, 25, 0.05)
+        plt.plot(t, y)
+        plt.plot(t, np.full(t.shape, x_1), "r--")
+        plt.plot(t, np.full(t.shape, x_2), "r--")
         plt.grid()
         plt.show()

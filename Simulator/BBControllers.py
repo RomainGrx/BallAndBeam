@@ -239,6 +239,121 @@ class Obj3PIDBBController(BBController):
         return raw_command
 
 
+class Obj7Controller(BBController):
+    """
+    Classe qui implemente un controleur assez simple pour les objectifs 6 et 7, tout en maintenant l'idiot-proofing
+    developpe dans le controleur PID de l'objectif 3.
+    """
+    def __init__(self, sim, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True):
+        super().__init__(sim)
+        self.using_idiot_proofing = using_idiot_proofing
+        self.k = k
+        self.x_1, self.x_2, self.v_min, self.v_max = x_1, x_2, v_min, v_max
+
+    @Simulator.command_limiter(low_bound=np.deg2rad(-50), up_bound=np.deg2rad(50))
+    def control_law(self, ref, pos, dt, u_1, flags_1):
+        # Modifie self.flags et retourne u
+        # Attention, dans LabVIEW ref est donne en cm, mais ici on le fait en m.
+        # De meme, les angles sont geres en degres dans LabVIEW et en radians ici.
+        # Memorisation de la position precedente avec le flag #0
+        # Memorisation de l'etape courante avec le flag #1 (0 = "placement", 1 = "faire la trajectoire x1->x2")
+        # Integrale de l'erreur avec le flag #2
+        # Memorisation de l'erreur precedente avec le flag #3
+        self.flags = flags_1
+
+        # Phase 1: "controleur"
+        # Parametres du controleur (a hardcoder dans LabVIEW)
+        k = self.k
+        theta_offset = self.sim.params["theta_offset"]
+        x_1, x_2, v_min, v_max = self.x_1, self.x_2, self.v_min, self.v_max
+        delta_v = v_max - v_min
+
+        # Calcul d'une position initiale permettant d'accelrer suffisamment avant d'atteindre 'x_1'
+        k_sp = 0.95  # Coefficient de "securite" par rapport aux v_min et v_max
+        start_pos = x_1 - np.sign(x_2 - x_1) * (v_min + k_sp * delta_v) ** 2 / 0.107
+        # print(start_pos)
+        # En l'absence d'idiot-proofing, on limite 'start_pos' au niveau des extremites du tube
+        if not self.using_idiot_proofing:
+            start_pos = np.sign(start_pos) * min(start_pos, 0.7 / 2)
+        # Sinon, si 'start_pos' est au-dela de la "buffer zone" de l'idiot-proofing, on la bride hors de celle-ci
+        elif abs(start_pos) > 0.35 - 0.06:
+            start_pos = (0.35 - 0.06) * np.sign(start_pos)
+
+        # Calcul de la commande
+        raw_command = 0 - theta_offset
+        # Si on est en mode "placement"
+        if self.flags[1] == 0:
+            # print("0:", round(self.sim.timestep * dt, 2))
+            # Si on doit encore se positionner au niveau de 'start_pos'
+            if abs(pos) < abs(start_pos) or pos * start_pos < 0:
+                # Dans cette situation, la contrainte de vitesse ne s'applique pas
+                # On ne doit pas forcement se stabiliser a 'start_pos', on peut donc utiliser un controleur plus simple
+                # Controle PID
+                kp, ki, kd = 3.28299695e+01, -1.31468554e-02,  4.26750713e+01
+                err = pos - start_pos * 1.10
+                deriv_err = (err - self.flags[3]) / dt
+                self.flags[2] += err * dt
+                self.flags[3] = err
+                integ_err = self.flags[2]
+                raw_command = kp * err + ki * integ_err + kd * deriv_err - theta_offset
+                # print("    ", np.round(np.rad2deg(raw_command + theta_offset), 3))
+            # Sinon, on bascule en mode "faire la trajectoire x_1 -> x_2"
+            else:
+                self.flags[1] = 1
+                self.flags[0] = pos  # Initialisation du flag #0 (sinon on donne un "choc" a l'iteration suivante)
+
+        # Si on est en mode "faire la trajectoire x_1 -> x_2"
+        if self.flags[1] == 1:
+            # print("1:", round(self.sim.timestep * dt, 2))
+            if np.sign(x_2 - x_1) * pos > 0 and abs(pos) > abs(x_2):
+                # Mission achevee, on peut donner une commande nulle parce qu'on ne doit plus faire quoi que ce soit
+                raw_command = 0 - theta_offset
+            else:
+                speed = (pos - self.flags[0]) / dt  # Calcul de la vitesse a l'aide du flag #0
+                self.flags[0] = pos                 # Mise a jour du flag #0 pour l'iteration suivante
+                # Calcul de la commande: nulle quand |speed| = k_sp * v_max, egale a +-k quand |speed| = k_sp * v_min
+                # print("speed", speed)
+                raw_command = k * np.sign(x_1 - x_2) * (v_min + delta_v / 2 * (1 + k_sp) - abs(speed)) /\
+                              (k_sp * delta_v) - theta_offset
+            # print("    ", np.round(np.rad2deg(raw_command + theta_offset), 3))
+
+        if not self.using_idiot_proofing:
+            return raw_command
+
+        # Phase 2: "Idiot proofing"
+        pos_lim = 0.35     # Delimitation de la "Bypass zone" (situee entre pos_lim et le bord)
+        buf_dist = 0.06    # Delimitation de la "Buffer zone" (buf_dist metres avant pos_lim)
+        speed_lim = 0.025  # Limite de vitesse autorisee dans la "Bypass zone"
+
+        # Gestion de la "Bypass zone": on fait sortir la bille de cette zone avec un angle plus ou moins grand
+        # Principe: on veut faire atterir la bille dans la buffer zone, donc d'abord on l'arrete, puis on la
+        # fait repartir avec une vitesse assez faible.
+        if abs(pos) > pos_lim:
+            # On adapte l'angle selon la necessite: on ne veut pas etre trop ferme, sinon ca va osciller
+            if np.sign(speed) == np.sign(pos):
+                angle = np.deg2rad(49)
+            elif 0 <= abs(speed) <= speed_lim:
+                angle = np.deg2rad(15) - (np.deg2rad(15) / speed_lim * abs(speed))
+            else:
+                angle = 0
+            return np.sign(pos) * angle - theta_offset
+
+        # Gestion de la "Buffer zone": cette zone sert a freiner la bille mais aussi comme zone buffer pour eviter que
+        # le controleur et l'idiot-rpoofing se renvoient la bille sans cesse.
+        # Note importante: Il n'y a une action de cette zone que quand la commande pousse la bille vers le bout du tube.
+        if pos_lim - buf_dist <= abs(pos) <= pos_lim and np.sign(raw_command) == -np.sign(pos):
+            if np.sign(speed) == np.sign(pos):
+                # Freinage
+                return np.sign(pos) * np.deg2rad(49) - theta_offset
+            else:
+                # Buffer
+                return 0 - theta_offset
+
+        # Si l'idiot proofing n'a pas effectue d'action particuliere, on retourne juste l'angle du controleur.
+        # print("RAW_COMMAND WAS KEPT:", np.round(np.rad2deg(raw_command + theta_offset), 3))
+        return raw_command
+
+
 def fit_pid(sim, setpoint_list, init_values=None, method=None, bounds=None):
     """
     Fonction permettant de faire une minimisation de l'erreur pour un controleur PID et sur un
@@ -373,13 +488,13 @@ def launch_fit_pid(sim):
 
 
 if __name__ == "__main__":
-    t = np.arange(0, 120, 0.05)  # Simulation d'un certain nombre de secondes (cf. 2e argument)
+    t = np.arange(0, 20, 0.05)  # Simulation d'un certain nombre de secondes (cf. 2e argument)
     sim = BBThetaSimulator(dt=0.05, buffer_size=t.size + 1)
     n_steps = t.size
 
-    # setpoint = np.full(t.shape, 0.15)                 # Setpoint constant
+    setpoint = np.full(t.shape, 0.25)                 # Setpoint constant
     # setpoint = 0.15 * np.sin(2 * np.pi * t / 12)      # Setpoint = sinus
-    setpoint = 0.15 * sig.square(2 * np.pi * t / 20)  # Setpoint = carre
+    # setpoint = 0.15 * sig.square(2 * np.pi * t / 20)  # Setpoint = carre
     # setpoint = 0.25 * np.sin(2 * np.pi * t / 15)      # Setpoint = sinus
 
     # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID
@@ -388,8 +503,17 @@ if __name__ == "__main__":
 
     # Valeurs de parametres PID obtenues par optimisation de l'erreur totale (lineaire, pas MSE)
     # sur un mix de setpoints (constant/sinus/carre).
-    kp, ki, kd = 3.28299695e+01, -1.31468554e-02,  4.26750713e+01
-    cont = Obj3PIDBBController(sim, kp, ki, kd, using_idiot_proofing=True)
+    # kp, ki, kd = 3.28299695e+01, -1.31468554e-02,  4.26750713e+01
+    # cont = Obj3PIDBBController(sim, kp, ki, kd, using_idiot_proofing=True)
+
+    # Test du controleur des objectifs 6 et 7 (le setpoint sert juste a determiner la duree de la simulation)
+    # Pour v_min = 0, ne pas descendre sous v_max = 0.03, car il s'agit de vitesses extremement lentes qui font
+    # que la bille s'arrete constamment avec le frottement statique. Ca "fonctionne" mais il y a beaucoup d'oscillations
+    # dues a la difficulte de la tache.
+    # De meme, la vitesse maximale que la bille peut atteindre est 0.08 cm/s dans ce simulateur. Imposer v_min > 0.08
+    # bloque donc le systeme.
+    k, x_1, x_2, v_min, v_max = np.deg2rad(50), 0.2, -0.05, 0.03, 0.05
+    cont = Obj7Controller(sim, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
 
     cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0, 0]))
 
