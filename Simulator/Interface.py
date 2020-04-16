@@ -60,22 +60,26 @@ def multiple_positions(x_init, x_desired):
     return y
 
 
-def multiple_positions_avec_contraintes(x_init, x_1, x_2, v_max, v_min):
+def multiple_positions_avec_contraintes(x_init, x_1, x_2, v_max, v_min, perturbation=lambda *args: args[0]):
     """
-    :param x_init : Position initiale de la bille [cm]
-    :param x_1    : Position de debut de la trajectoire a effectuer [cm]
-    :param x_2    : Position de fin de la trajectoire a effectuer [cm]
-    :param v_max  : Vitesse maximale sur la trajectoire [cm/s]
-    :param v_min  : Vitesse minimale sur la trajectoire [cm/s]
-    :return       : Evolution de l'etat du systeme (position de la bille [cm])
+    :param x_init       : Position initiale de la bille [cm]
+    :param x_1          : Position de debut de la trajectoire a effectuer [cm]
+    :param x_2          : Position de fin de la trajectoire a effectuer [cm]
+    :param v_max        : Vitesse maximale sur la trajectoire [cm/s]
+    :param v_min        : Vitesse minimale sur la trajectoire [cm/s]
+    :param perturbation : Fonction pour perturber l'acceleration: 'perturbation(a_desired, x, v, alpha, t)'
+    :return             : Evolution de l'etat du systeme (position de la bille [cm])
     """
     # Conversion des unites
     x_init, x_1, x_2, v_min, v_max = x_init / 100, x_1 / 100, x_2 / 100, v_min / 100, v_max / 100
 
+    def si_perturbation(a_desired, x, v, alpha, t):
+        return 0.01 * perturbation(100 * a_desired, 100 * x, 100 * v, np.rad2deg(alpha), t)
+
     # Setup du simulateur et du
-    t = np.arange(0, 25, 0.05)  # 25s a semble suffisant pour n'importe quelle trajectoire
+    t = np.arange(0, 125, 0.05)  # 25s a semble suffisant pour n'importe quelle trajectoire (on met une marge de x5)
     n_steps = t.size
-    s = sim.BBThetaSimulator(buffer_size=n_steps + 1)
+    s = sim.BBObj7Simulator(si_perturbation, buffer_size=n_steps + 1)
     c = cont.Obj7Controller(s, np.deg2rad(50), x_1, x_2, v_min, v_max, using_idiot_proofing=True)
 
     # Lancement de la simulation
@@ -91,9 +95,20 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import scipy.signal as sig
 
+    # Pour tester l'objectif #3
     # test_function = "idiot_proof_test"
+
+    # Pour tester l'objectif #5
     # test_function = "multiple_positions"
+
+    # Pour tester l'objectif #6 ou l'objectif #7 (dans ce cas, activer la fonction 'perturbation' ci-dessous)
     test_function = "multiple_positions_avec_contraintes"
+
+    # Pour tester l'objectif #7
+    def perturbation(a_desired, x, v, alpha, t):
+        # Unites: [cm/s^2], [cm], [cm/s], [deg], [s]; Retour: [cm/s^2]
+        return a_desired
+
 
     if test_function == "idiot_proof_test":
         # Test de la fonction d'interface 'idiot_proof_test'
@@ -116,11 +131,11 @@ if __name__ == "__main__":
         plt.show()
 
     elif test_function == "multiple_positions_avec_contraintes":
-        # Test de la fonction d'interface 'multiple_positions'
+        # Test de la fonction d'interface 'multiple_positions_avec_contraintes'
         x_init = -10
         x_1, x_2, v_min, v_max = 20, -5, 3, 4
-        y = multiple_positions_avec_contraintes(x_init, x_1, x_2, v_max, v_min)
-        t = np.arange(0, 25, 0.05)
+        y = multiple_positions_avec_contraintes(x_init, x_1, x_2, v_max, v_min, perturbation)
+        t = np.arange(0, 125, 0.05)
         plt.plot(t, y)
         plt.plot(t, np.full(t.shape, x_1), "r--")
         plt.plot(t, np.full(t.shape, x_2), "r--")

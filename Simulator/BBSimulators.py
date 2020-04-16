@@ -63,7 +63,7 @@ class BBSimpleSimulator(BBSimulator):
         m, x, g, r = self.params["m"], self.all_x[self.timestep], self.params["g"], self.params["r"]
         jb, alpha, dalpha_dt = self.params["jb"], self.all_u[self.timestep], self.dudt()
         dx1_dt = x[1]
-        dx2_dt = (m * x[0] * dalpha_dt**2 - m * g * np.sin(alpha)) / (jb / r**2 + m)
+        dx2_dt = ((m * x[0] * dalpha_dt**2 - m * g * np.sin(alpha)) / (jb / r**2 + m))[0]
         return np.array([dx1_dt, dx2_dt])
 
 
@@ -82,14 +82,8 @@ class BBAlphaSimulator(BBSimulator):
         m, x, g, r = self.params["m"], self.all_x[self.timestep], self.params["g"], self.params["r"]
         jb, alpha, dalpha_dt = self.params["jb"], self.all_u[self.timestep], self.dudt()
         rho, v, kf = self.params["rho"], self.params["v"], self.params["kf"]
-        ### <PRE-MODIF> ###
-        # dx1_dt = x[1]
-        # dx2_dt = (m * x[0] * dalpha_dt ** 2 - m * g * np.sin(alpha) - (rho * v * g + kf) * x[1]) / (jb / r ** 2 + m)
-        ### </PRE-MODIF> ###
-        ### <POST-MODIF> ###
         dx1_dt = x[1]
-        dx2_dt = (m * x[0] * dalpha_dt ** 2 - np.sin(alpha) * (m - rho * v) * g - kf * x[1]) / (jb / r ** 2 + m)
-        ### </POST-MODIF> ###
+        dx2_dt = ((m * x[0] * dalpha_dt ** 2 - np.sin(alpha) * (m - rho * v) * g - kf * x[1]) / (jb / r ** 2 + m))[0]
         return np.array([dx1_dt, dx2_dt])
 
     def update_state(self):
@@ -170,14 +164,8 @@ class BBThetaSimulator(BBAlphaSimulator):
         dalpha_dt = d * np.cos(theta) * self.dudt() / (l * np.sqrt(1 - (d * np.sin(theta) / l) ** 2))
         rho, v, kf, ff_pow = self.params["rho"], self.params["v"], self.params["kf"], self.params["ff_pow"]
         x1_pow = np.power(np.abs(x[1]), ff_pow) * np.sign(x[1])  # Laisser le abs sinon racines complexes
-        ### <PRE-MODIF> ###
-        # dx1_dt = x[1]
-        # dx2_dt = (m * x[0] * dalpha_dt ** 2 - m * g * np.sin(alpha) - (rho * v * g + kf) * x1_pow) / (jb / r ** 2 + m)
-        ### </PRE-MODIF> ###
-        ### <POST-MODIF> ###
         dx1_dt = x[1]
-        dx2_dt = (m * x[0] * dalpha_dt ** 2 - np.sin(alpha) * (m - rho * v) * g - kf * x1_pow) / (jb / r ** 2 + m)
-        ### </POST-MODIF> ###
+        dx2_dt = ((m * x[0] * dalpha_dt ** 2 - np.sin(alpha) * (m - rho * v) * g - kf * x1_pow) / (jb / r ** 2 + m))[0]
 
         # Gestion du frottement statique
         if abs(theta) + stat_bound / stat_spd_coeff * abs(dx1_dt) < stat_bound:
@@ -193,6 +181,24 @@ class BBThetaSimulator(BBAlphaSimulator):
         # entre 'low' + 'offset' et 'up' + 'offset')
         return super().simulate(lambda *args, **kwargs: command_func(*args, **kwargs) + self.params["theta_offset"],
                                 command_noise_func, output_noise_func, n_steps, init_state)
+
+
+class BBObj7Simulator(BBThetaSimulator):
+    """Simulateur qui fonctionne comme BBThetaSimulator, sauf que l'acceleration 'dx2_dt' est calculee par une
+    fonction de perturbation comme specifiee dans l'objectif 7 (mail)
+    TODO: faire une plus belle docstring"""
+
+    def __init__(self, perturbation=lambda *args: args[0], dt=0.05, buffer_size=10000):
+        super().__init__(dt, buffer_size)
+        self.perturbation = perturbation
+
+    def dxdt(self):
+        # Application de la fonction de perturbation pour le calcul de l'acceleration de la bille
+        dx1_dt, dx2_dt = super().dxdt()
+        pos, spd = self.all_x[self.timestep]
+        theta = self.all_u[self.timestep]
+        t = self.timestep * self.dt
+        return np.array([dx1_dt, self.perturbation(dx2_dt, pos, spd, theta, t)])
 
 
 if __name__ == "__main__":
@@ -238,9 +244,14 @@ if __name__ == "__main__":
         return 0
         # return (2 * np.random.random(1) - 1) * 0.025  # Erreur de +- 2.5cm a la mesure
 
+    # Fonction de perturbation, pour l'objectif 7 (unites SI et rad, pas en cm et deg comme dans les consignes)
+    def my_perturbation(a_desired, x, v, alpha, t):
+        return a_desired
+
     # sim = BBSimpleSimulator(dt=0.05, buffer_size=1000)
     # sim = BBAlphaSimulator(dt=0.05, buffer_size=1000)
-    sim = BBThetaSimulator(dt=0.05, buffer_size=1000)
+    # sim = BBThetaSimulator(dt=0.05, buffer_size=1000)
+    sim = BBObj7Simulator(my_perturbation, dt=0.05, buffer_size=1000)
 
     my_init_state = np.array([0, 0])
     # my_init_state = np.array([0, -0.333])
