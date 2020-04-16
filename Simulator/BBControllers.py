@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import scipy.signal as sig
 
 from Simulator import Simulator
-from BBSimulators import BBThetaSimulator
+from BBSimulators import BBThetaSimulator, BBObj7Simulator
 
 
 class BBController(abc.ABC):
@@ -261,6 +261,9 @@ class Obj7Controller(BBController):
         # Memorisation de l'erreur precedente avec le flag #3
         self.flags = flags_1
 
+        speed = (pos - self.flags[0]) / dt  # Calcul de la vitesse a l'aide du flag #0
+        self.flags[0] = pos                 # Mise a jour du flag #0 pour l'iteration suivante
+
         # Phase 1: "controleur"
         # Parametres du controleur (a hardcoder dans LabVIEW)
         k = self.k
@@ -300,7 +303,6 @@ class Obj7Controller(BBController):
             # Sinon, on bascule en mode "faire la trajectoire x_1 -> x_2"
             else:
                 self.flags[1] = 1
-                self.flags[0] = pos  # Initialisation du flag #0 (sinon on donne un "choc" a l'iteration suivante)
 
         # Si on est en mode "faire la trajectoire x_1 -> x_2"
         if self.flags[1] == 1:
@@ -309,8 +311,6 @@ class Obj7Controller(BBController):
                 # Mission achevee, on peut donner une commande nulle parce qu'on ne doit plus faire quoi que ce soit
                 raw_command = 0 - theta_offset
             else:
-                speed = (pos - self.flags[0]) / dt  # Calcul de la vitesse a l'aide du flag #0
-                self.flags[0] = pos                 # Mise a jour du flag #0 pour l'iteration suivante
                 # Calcul de la commande: nulle quand |speed| = k_sp * v_max, egale a +-k quand |speed| = k_sp * v_min
                 # print("speed", speed)
                 raw_command = k * np.sign(x_1 - x_2) * (v_min + delta_v / 2 * (1 + k_sp) - abs(speed)) /\
@@ -489,7 +489,7 @@ def launch_fit_pid(sim):
 
 if __name__ == "__main__":
     t = np.arange(0, 20, 0.05)  # Simulation d'un certain nombre de secondes (cf. 2e argument)
-    sim = BBThetaSimulator(dt=0.05, buffer_size=t.size + 1)
+    # sim = BBThetaSimulator(dt=0.05, buffer_size=t.size + 1)
     n_steps = t.size
 
     setpoint = np.full(t.shape, 0.25)                 # Setpoint constant
@@ -513,9 +513,35 @@ if __name__ == "__main__":
     # De meme, la vitesse maximale que la bille peut atteindre est 0.08 cm/s dans ce simulateur. Imposer v_min > 0.08
     # bloque donc le systeme.
     k, x_1, x_2, v_min, v_max = np.deg2rad(50), 0.2, -0.05, 0.03, 0.05
+
+    def perturbation(a_desired, x, v, alpha, t):
+        """
+        Fonction de perturbation qui permet de forcer l'acceleration de la bille. L'acceleration non-forcee est
+        'a_desired'. Pour rendre cette fonction sans effet, faire 'return a_desired'.
+
+        :param a_desired : Valeur de l'acceleration de la bille issue du modele physique [m/s^2]
+        :param x         : Position de la bille [m]
+        :param v         : Vitesse de la bille [m/s]
+        :param alpha     : Angle du servo (pas de la poutre!) [rad]
+        :param t         : Temps depuis le debut de la simulation [s]
+        :return          : Valeur de l'acceleration forcee de la bille [m/s^2]
+        """
+        return a_desired
+
+    sim = BBObj7Simulator(perturbation, dt=0.05, buffer_size=t.size + 1)
     cont = Obj7Controller(sim, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
 
     cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0, 0]))
+
+    # Test *semi-automatique* de la contrainte de vitesse: inserer manuellement des valeurs de temps pour 't_1' et 't_2'
+    # 't_i' = temps auquel la bille se trouve au point 'x_i' de la trajectoire (i = 1 ou 2)
+    t_1, t_2 = 5.5, 11.2
+    trajectory_indices = np.bitwise_and(t_1 <= t, t <= t_2)
+    traj_speeds = np.absolute(np.diff(sim.all_y.flatten()[:-1][trajectory_indices]) / sim.dt)
+    print("SUCCESS" if np.all(np.bitwise_and(v_min <= traj_speeds, traj_speeds <= v_max)) else "FAILURE", end=" ")
+    print("(Assumed trajectory between t_1 = {} s and t_2 = {} s)".format(t_1, t_2))
+    print("Measured speeds [m/s]:\n    min = {}\n    max = {}".format(traj_speeds.min().round(4),
+                                                                      traj_speeds.max().round(4)))
 
     plot_simulation(t, n_steps, sim, setpoint)
     plt.show()
