@@ -207,7 +207,7 @@ class Obj3PIDBBController(BBController):
         # Idiot proofing
         speed = (pos - self.flags[3]) / dt  # Calcul de la vitesse a l'aide du flag #3
         self.flags[3] = pos                 # Mise a jour du flag #3 pour l'iteration suivante
-        pos_lim = 0.35                      # Delimitation de la "Bypass zone" (situee entre pos_lim et le bord)
+        pos_lim = 0.33                      # Delimitation de la "Bypass zone" (situee entre pos_lim et le bord)
         buf_dist = 0.06                     # Delimitation de la "Buffer zone" (buf_dist metres avant pos_lim)
         speed_lim = 0.025                   # Limite de vitesse autorisee dans la "Bypass zone"
 
@@ -321,7 +321,7 @@ class Obj7Controller(BBController):
             return raw_command
 
         # Phase 2: "Idiot proofing"
-        pos_lim = 0.35     # Delimitation de la "Bypass zone" (situee entre pos_lim et le bord)
+        pos_lim = 0.33     # Delimitation de la "Bypass zone" (situee entre pos_lim et le bord)
         buf_dist = 0.06    # Delimitation de la "Buffer zone" (buf_dist metres avant pos_lim)
         speed_lim = 0.025  # Limite de vitesse autorisee dans la "Bypass zone"
 
@@ -531,7 +531,7 @@ if __name__ == "__main__":
     sim = BBObj7Simulator(perturbation, dt=0.05, buffer_size=t.size + 1)
     cont = Obj7Controller(sim, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
 
-    cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0, 0]))
+    cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([-0.2, -0.3]))
 
     # Test *semi-automatique* de la contrainte de vitesse: inserer manuellement des valeurs de temps pour 't_1' et 't_2'
     # 't_i' = temps auquel la bille se trouve au point 'x_i' de la trajectoire (i = 1 ou 2)
