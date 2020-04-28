@@ -166,7 +166,7 @@ class FreeControlBBController(BBController):
         return raw_command
 
 
-class Obj3PIDBBController(BBController):
+class Obj5PIDBBController(BBController):
     """
     Classe qui implemente une loi de controle de type PID pour le systeme Ball and Beam du projet P4 MAP.
     Ce controleur implemente aussi une version du "idiot proofing".
@@ -274,6 +274,10 @@ class Obj7Controller(BBController):
         # Calcul d'une position initiale permettant d'accelerer suffisamment avant d'atteindre 'x_1'
         k_sp = 0.95  # Coefficient de "securite" par rapport aux v_min et v_max
         start_pos = x_1 - np.sign(x_2 - x_1) * (v_min + k_sp * delta_v) ** 2 / 0.107
+        if start_pos > 0 :
+            start_pos+=0.01
+        if start_pos < 0:
+            start_pos-=0.01
         # print(start_pos)
         # En l'absence d'idiot-proofing, on limite 'start_pos' au niveau des extremites du tube
         if not self.using_idiot_proofing:
@@ -281,14 +285,13 @@ class Obj7Controller(BBController):
         # Sinon, si 'start_pos' est au-dela de la "buffer zone" de l'idiot-proofing, on la bride hors de celle-ci
         elif abs(start_pos) > 0.35 - 0.06:
             start_pos = (0.35 - 0.06) * np.sign(start_pos)
-
         # Calcul de la commande
         raw_command = 0 - theta_offset
         # Si on est en mode "placement"
         if self.flags[1] == 0:
             # print("0:", round(self.sim.timestep * dt, 2))
             # Si on doit encore se positionner au niveau de 'start_pos'
-            if abs(pos) < abs(start_pos) or pos * start_pos < 0:
+            if abs(pos) < abs(start_pos)-0.01 or pos * start_pos < 0:
                 # Dans cette situation, la contrainte de vitesse ne s'applique pas
                 # On ne doit pas forcement se stabiliser a 'start_pos', on peut donc utiliser un controleur plus simple
                 # Controle PID
@@ -497,13 +500,13 @@ def launch_fit_pid(sim):
 
 if __name__ == "__main__":
     t = np.arange(0, 250, 0.05)  # Simulation d'un certain nombre de secondes (cf. 2e argument)
-    sim = BBThetaSimulator(dt=0.05, buffer_size=t.size + 1)
+    # sim = BBThetaSimulator(dt=0.05, buffer_size=t.size + 1)
     n_steps = t.size
 
     setpoint = np.full(t.shape, 0.25)                 # Setpoint constant
     # setpoint = 0.15 * np.sin(2 * np.pi * t / 12)      # Setpoint = sinus
     # setpoint = 0.15 * sig.square(2 * np.pi * t / 20)  # Setpoint = carre
-    setpoint = 0.5 * np.sin(2 * np.pi * t / 40)      # Setpoint = sinus
+    # setpoint = 0.5 * np.sin(2 * np.pi * t / 40)      # Setpoint = sinus
 
     # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID
     # launch_fit_pid(sim)
@@ -511,8 +514,8 @@ if __name__ == "__main__":
 
     # Valeurs de parametres PID obtenues par optimisation de l'erreur totale (lineaire, pas MSE)
     # sur un mix de setpoints (constant/sinus/carre).
-    kp, ki, kd = 3.28299695e+01, -1.31468554e-02,  4.26750713e+01
-    cont = Obj3PIDBBController(sim, kp, ki, kd, using_idiot_proofing=True)
+    # kp, ki, kd = 3.28299695e+01, -1.31468554e-02,  4.26750713e+01
+    # cont = Obj5PIDBBController(sim, kp, ki, kd, using_idiot_proofing=True)
 
     # Test du controleur des objectifs 6 et 7 (le setpoint sert juste a determiner la duree de la simulation)
     # Pour v_min = 0, ne pas descendre sous v_max = 0.03, car il s'agit de vitesses extremement lentes qui font
@@ -520,7 +523,8 @@ if __name__ == "__main__":
     # dues a la difficulte de la tache.
     # De meme, la vitesse maximale que la bille peut atteindre est 0.08 cm/s dans ce simulateur. Imposer v_min > 0.08
     # bloque donc le systeme.
-    k, x_1, x_2, v_min, v_max = np.deg2rad(50), 0.2, -0.05, 0.03, 0.06
+
+    k, x_1, x_2, v_min, v_max = np.deg2rad(50), 0.0, 0.30, 0.03, 0.035
 
     def perturbation(a_desired, x, v, alpha, t):
         """
@@ -542,10 +546,10 @@ if __name__ == "__main__":
         #     return a_desired + np.random.random() * np.random.choice([-1, 1]) * 0.2
         return a_desired
 
-    # sim = BBObj7Simulator(perturbation, dt=0.05, buffer_size=t.size + 1)
-    # cont = Obj7Controller(sim, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
+    sim = BBObj7Simulator(perturbation, dt=0.05, buffer_size=t.size + 1)
+    cont = Obj7Controller(sim, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
 
-    cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([-0.2, -0.3]))
+    cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0.0, 0.0]))
 
     # Test *semi-automatique* de la contrainte de vitesse: inserer manuellement des valeurs de temps pour 't_1' et 't_2'
     # 't_i' = temps auquel la bille se trouve au point 'x_i' de la trajectoire (i = 1 ou 2)
