@@ -274,6 +274,10 @@ class Obj7Controller(BBController):
         # Calcul d'une position initiale permettant d'accelrer suffisamment avant d'atteindre 'x_1'
         k_sp = 0.95  # Coefficient de "securite" par rapport aux v_min et v_max
         start_pos = x_1 - np.sign(x_2 - x_1) * (v_min + k_sp * delta_v) ** 2 / 0.107
+        if start_pos > 0 :
+            start_pos+=0.01
+        if start_pos < 0:
+            start_pos-=0.01
         # print(start_pos)
         # En l'absence d'idiot-proofing, on limite 'start_pos' au niveau des extremites du tube
         if not self.using_idiot_proofing:
@@ -287,7 +291,7 @@ class Obj7Controller(BBController):
         if self.flags[1] == 0:
             # print("0:", round(self.sim.timestep * dt, 2))
             # Si on doit encore se positionner au niveau de 'start_pos'
-            if abs(pos) < abs(start_pos)-0.003 or pos * start_pos < 0:
+            if abs(pos) < abs(start_pos)-0.01 or pos * start_pos < 0:
                 # Dans cette situation, la contrainte de vitesse ne s'applique pas
                 # On ne doit pas forcement se stabiliser a 'start_pos', on peut donc utiliser un controleur plus simple
                 # Controle PID
@@ -511,7 +515,7 @@ if __name__ == "__main__":
     # dues a la difficulte de la tache.
     # De meme, la vitesse maximale que la bille peut atteindre est 0.08 cm/s dans ce simulateur. Imposer v_min > 0.08
     # bloque donc le systeme.
-    k, x_1, x_2, v_min, v_max = np.deg2rad(50), 0.0, 0.30, 0.03, 0.08
+    k, x_1, x_2, v_min, v_max = np.deg2rad(50), 0.0, 0.30, 0.03, 0.035
 
     def perturbation(a_desired, x, v, alpha, t):
         """
@@ -526,7 +530,7 @@ if __name__ == "__main__":
         :return          : Valeur de l'acceleration forcee de la bille [m/s^2]
         """
         
-        return a_desired+0.024
+        return a_desired
 
     sim = BBObj7Simulator(perturbation, dt=0.05, buffer_size=t.size + 1)
     cont = Obj7Controller(sim, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
