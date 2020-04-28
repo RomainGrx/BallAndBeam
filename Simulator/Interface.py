@@ -41,7 +41,7 @@ def multiple_positions(x_init, x_desired):
     # Setup du simulateur et du controleur
     kp, ki, kd = 5.13051124e+01, -1.59963530e-02, 9.82885344e+00
     s = sim.BBThetaSimulator(buffer_size=x_desired.size * 20 + 1)
-    c = cont.Obj3PIDBBController(s, kp, ki, kd, using_idiot_proofing=True)
+    c = cont.Obj5PIDBBController(s, kp, ki, kd, using_idiot_proofing=True)
 
     # Conversion des unites (cm -> m; deg -> rad)
     x_init /= 100

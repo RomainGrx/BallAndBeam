@@ -166,7 +166,7 @@ class FreeControlBBController(BBController):
         return raw_command
 
 
-class Obj3PIDBBController(BBController):
+class Obj5PIDBBController(BBController):
     """
     Classe qui implemente une loi de controle de type PID pour le systeme Ball and Beam du projet P4 MAP.
     Ce controleur implemente aussi une version du "idiot proofing".
@@ -507,7 +507,7 @@ if __name__ == "__main__":
     # Valeurs de parametres PID obtenues par optimisation de l'erreur totale (lineaire, pas MSE)
     # sur un mix de setpoints (constant/sinus/carre).
     # kp, ki, kd = 3.28299695e+01, -1.31468554e-02,  4.26750713e+01
-    # cont = Obj3PIDBBController(sim, kp, ki, kd, using_idiot_proofing=True)
+    # cont = Obj5PIDBBController(sim, kp, ki, kd, using_idiot_proofing=True)
 
     # Test du controleur des objectifs 6 et 7 (le setpoint sert juste a determiner la duree de la simulation)
     # Pour v_min = 0, ne pas descendre sous v_max = 0.03, car il s'agit de vitesses extremement lentes qui font
