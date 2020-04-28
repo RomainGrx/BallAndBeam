@@ -455,6 +455,25 @@ class Tests:
         # Ne pas utiliser plusieurs workers, sinon il y aura des race conditions sur l'objet 'bbsimulator'.
         return opt.brute(err_func, ranges, Ns=Ns, finish=None, workers=1)
 
+    @staticmethod
+    def generate_distribution(training_data_paths, validation_data_paths, sim, err_pow=2):
+        t_errs = np.empty(len(training_data_paths))
+        v_errs = np.empty(len(validation_data_paths))
+
+        for err_set, data_set in zip((t_errs, v_errs), (training_data_paths, validation_data_paths)):
+            for i, t_path in enumerate(err_set):
+                df = pd.read_csv(t_path, sep="\t", index_col=0, skiprows=2, header=0, usecols=[0, 1, 2],
+                                 names=["timestep", "theta_deg", "pos_cm"])
+                init_state = np.zeros((2,))
+                init_state[0] = df.pos_cm[0] / 100
+                init_state[1] = (df.pos_cm[1] - df.pos_cm[0]) / sim.dt / 100
+                sim.simulate(lambda timestep, *args, **kwargs: np.deg2rad(df.theta_deg[timestep]),
+                             n_steps=df.shape[0], init_state=init_state)
+                err = np.sum(np.power(np.abs(sim.all_y[:df.shape[0]].flatten() - df.pos_cm / 100), err_pow))
+                err_set[i] = err
+
+
+
 
 if __name__ == "__main__":
     from BBSimulators import BBThetaSimulator

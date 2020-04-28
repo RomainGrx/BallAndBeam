@@ -271,7 +271,7 @@ class Obj7Controller(BBController):
         x_1, x_2, v_min, v_max = self.x_1, self.x_2, self.v_min, self.v_max
         delta_v = v_max - v_min
 
-        # Calcul d'une position initiale permettant d'accelrer suffisamment avant d'atteindre 'x_1'
+        # Calcul d'une position initiale permettant d'accelerer suffisamment avant d'atteindre 'x_1'
         k_sp = 0.95  # Coefficient de "securite" par rapport aux v_min et v_max
         start_pos = x_1 - np.sign(x_2 - x_1) * (v_min + k_sp * delta_v) ** 2 / 0.107
         # print(start_pos)
@@ -390,11 +390,11 @@ def fit_pid(sim, setpoint_list, init_values=None, method=None, bounds=None):
                             niter_success=7)
 
 
-def plot_simulation(t, n_steps, sim, setpoint):
+def plot_simulation(t, n_steps, sim, setpoint, x_1, x_2, t_1, t_2, v_min, v_max):
     fig, ((ax_pos), (ax_theta)) = plt.subplots(nrows=2, sharex=True)
-    ax_pos.plot(t, setpoint, "ro--", linewidth=0.7, markersize=2, markevery=20, label="Setpoint [m]")
+    # ax_pos.plot(t, setpoint, "ro--", linewidth=0.7, markersize=2, markevery=20, label="Setpoint [m]")
     ax_pos.plot(t, sim.all_y[:n_steps], "k-", label="Position [m]")
-    ax_pos.plot(t, sim.all_y[:n_steps].flatten() - setpoint, "m--", linewidth=0.7, label="Error [m]")
+    # ax_pos.plot(t, sim.all_y[:n_steps].flatten() - setpoint, "m--", linewidth=0.7, label="Error [m]")
     ax_pos.plot(t, np.full(t.shape, 0.775 / 2), color="grey", linestyle="--", linewidth=1, label="Bounds")
     ax_pos.plot(t, np.full(t.shape, -0.775 / 2), color="grey", linestyle="--", linewidth=1)
     ax_theta.plot(t, np.rad2deg(sim.all_u[:n_steps] - sim.params["theta_offset"]), color="navy",
@@ -403,6 +403,14 @@ def plot_simulation(t, n_steps, sim, setpoint):
     #               label="Actual offset angle [deg]")
     ax_theta.plot(t, np.full(t.shape, -50), color="grey", linestyle="--", linewidth=1)
     ax_theta.plot(t, np.full(t.shape, 50), color="grey", linestyle="--", linewidth=1)
+
+    speed_sign = np.sign(x_2 - x_1)
+    speed_t = np.linspace(t_1, t_2, 100)
+    y_1, y_2 = sim.all_y[sim.all_t == t_1], sim.all_y[sim.all_t == t_2]
+    print(y_1, y_2)
+    ax_pos.plot(speed_t, np.full(speed_t.shape, y_1) + speed_sign * v_min * (speed_t - t_1), "r--")
+    ax_pos.plot(speed_t, np.full(speed_t.shape, y_1) + speed_sign * v_max * (speed_t - t_1), "r--")
+
     # ax_pos.legend()
     # ax_theta.legend()
     fig.legend(loc="right")
@@ -488,14 +496,14 @@ def launch_fit_pid(sim):
 
 
 if __name__ == "__main__":
-    t = np.arange(0, 20, 0.05)  # Simulation d'un certain nombre de secondes (cf. 2e argument)
-    # sim = BBThetaSimulator(dt=0.05, buffer_size=t.size + 1)
+    t = np.arange(0, 250, 0.05)  # Simulation d'un certain nombre de secondes (cf. 2e argument)
+    sim = BBThetaSimulator(dt=0.05, buffer_size=t.size + 1)
     n_steps = t.size
 
     setpoint = np.full(t.shape, 0.25)                 # Setpoint constant
     # setpoint = 0.15 * np.sin(2 * np.pi * t / 12)      # Setpoint = sinus
     # setpoint = 0.15 * sig.square(2 * np.pi * t / 20)  # Setpoint = carre
-    # setpoint = 0.25 * np.sin(2 * np.pi * t / 15)      # Setpoint = sinus
+    setpoint = 0.5 * np.sin(2 * np.pi * t / 40)      # Setpoint = sinus
 
     # Decommenter les deux lignes ci-dessous pour lancer un fit du controleur PID
     # launch_fit_pid(sim)
@@ -503,8 +511,8 @@ if __name__ == "__main__":
 
     # Valeurs de parametres PID obtenues par optimisation de l'erreur totale (lineaire, pas MSE)
     # sur un mix de setpoints (constant/sinus/carre).
-    # kp, ki, kd = 3.28299695e+01, -1.31468554e-02,  4.26750713e+01
-    # cont = Obj3PIDBBController(sim, kp, ki, kd, using_idiot_proofing=True)
+    kp, ki, kd = 3.28299695e+01, -1.31468554e-02,  4.26750713e+01
+    cont = Obj3PIDBBController(sim, kp, ki, kd, using_idiot_proofing=True)
 
     # Test du controleur des objectifs 6 et 7 (le setpoint sert juste a determiner la duree de la simulation)
     # Pour v_min = 0, ne pas descendre sous v_max = 0.03, car il s'agit de vitesses extremement lentes qui font
@@ -512,7 +520,7 @@ if __name__ == "__main__":
     # dues a la difficulte de la tache.
     # De meme, la vitesse maximale que la bille peut atteindre est 0.08 cm/s dans ce simulateur. Imposer v_min > 0.08
     # bloque donc le systeme.
-    k, x_1, x_2, v_min, v_max = np.deg2rad(50), 0.2, -0.05, 0.03, 0.05
+    k, x_1, x_2, v_min, v_max = np.deg2rad(50), 0.2, -0.05, 0.03, 0.06
 
     def perturbation(a_desired, x, v, alpha, t):
         """
@@ -526,16 +534,22 @@ if __name__ == "__main__":
         :param t         : Temps depuis le debut de la simulation [s]
         :return          : Valeur de l'acceleration forcee de la bille [m/s^2]
         """
+        if 5 < t < 7:
+            return -0.15
+        if 19 < t < 21:
+            return a_desired + np.random.random() * np.random.choice([-1, 1]) * 0.1
+        # if 5 < t < 8 or 11 < t < 13:
+        #     return a_desired + np.random.random() * np.random.choice([-1, 1]) * 0.2
         return a_desired
 
-    sim = BBObj7Simulator(perturbation, dt=0.05, buffer_size=t.size + 1)
-    cont = Obj7Controller(sim, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
+    # sim = BBObj7Simulator(perturbation, dt=0.05, buffer_size=t.size + 1)
+    # cont = Obj7Controller(sim, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
 
     cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([-0.2, -0.3]))
 
     # Test *semi-automatique* de la contrainte de vitesse: inserer manuellement des valeurs de temps pour 't_1' et 't_2'
     # 't_i' = temps auquel la bille se trouve au point 'x_i' de la trajectoire (i = 1 ou 2)
-    t_1, t_2 = 5.5, 11.2
+    t_1, t_2 = 17.2, 22.2
     trajectory_indices = np.bitwise_and(t_1 <= t, t <= t_2)
     traj_speeds = np.absolute(np.diff(sim.all_y.flatten()[:-1][trajectory_indices]) / sim.dt)
     print("SUCCESS" if np.all(np.bitwise_and(v_min <= traj_speeds, traj_speeds <= v_max)) else "FAILURE", end=" ")
@@ -543,5 +557,5 @@ if __name__ == "__main__":
     print("Measured speeds [m/s]:\n    min = {}\n    max = {}".format(traj_speeds.min().round(4),
                                                                       traj_speeds.max().round(4)))
 
-    plot_simulation(t, n_steps, sim, setpoint)
+    plot_simulation(t, n_steps, sim, setpoint, x_1, x_2, t_1, t_2, v_min, v_max)
     plt.show()
