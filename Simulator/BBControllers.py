@@ -281,14 +281,13 @@ class Obj7Controller(BBController):
         # Sinon, si 'start_pos' est au-dela de la "buffer zone" de l'idiot-proofing, on la bride hors de celle-ci
         elif abs(start_pos) > 0.35 - 0.06:
             start_pos = (0.35 - 0.06) * np.sign(start_pos)
-
         # Calcul de la commande
         raw_command = 0 - theta_offset
         # Si on est en mode "placement"
         if self.flags[1] == 0:
             # print("0:", round(self.sim.timestep * dt, 2))
             # Si on doit encore se positionner au niveau de 'start_pos'
-            if abs(pos) < abs(start_pos) or pos * start_pos < 0:
+            if abs(pos) < abs(start_pos)-0.003 or pos * start_pos < 0:
                 # Dans cette situation, la contrainte de vitesse ne s'applique pas
                 # On ne doit pas forcement se stabiliser a 'start_pos', on peut donc utiliser un controleur plus simple
                 # Controle PID
@@ -512,7 +511,7 @@ if __name__ == "__main__":
     # dues a la difficulte de la tache.
     # De meme, la vitesse maximale que la bille peut atteindre est 0.08 cm/s dans ce simulateur. Imposer v_min > 0.08
     # bloque donc le systeme.
-    k, x_1, x_2, v_min, v_max = np.deg2rad(50), 0.2, -0.05, 0.03, 0.05
+    k, x_1, x_2, v_min, v_max = np.deg2rad(50), 0.0, 0.30, 0.03, 0.08
 
     def perturbation(a_desired, x, v, alpha, t):
         """
@@ -526,16 +525,17 @@ if __name__ == "__main__":
         :param t         : Temps depuis le debut de la simulation [s]
         :return          : Valeur de l'acceleration forcee de la bille [m/s^2]
         """
-        return a_desired
+        
+        return a_desired+0.024
 
     sim = BBObj7Simulator(perturbation, dt=0.05, buffer_size=t.size + 1)
     cont = Obj7Controller(sim, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
 
-    cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([-0.2, -0.3]))
+    cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([0.0, 0.0]))
 
     # Test *semi-automatique* de la contrainte de vitesse: inserer manuellement des valeurs de temps pour 't_1' et 't_2'
     # 't_i' = temps auquel la bille se trouve au point 'x_i' de la trajectoire (i = 1 ou 2)
-    t_1, t_2 = 5.5, 11.2
+    t_1, t_2 = 10.1, 14.6
     trajectory_indices = np.bitwise_and(t_1 <= t, t <= t_2)
     traj_speeds = np.absolute(np.diff(sim.all_y.flatten()[:-1][trajectory_indices]) / sim.dt)
     print("SUCCESS" if np.all(np.bitwise_and(v_min <= traj_speeds, traj_speeds <= v_max)) else "FAILURE", end=" ")
