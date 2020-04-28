@@ -461,7 +461,7 @@ class Tests:
         v_errs = np.empty(len(validation_data_paths))
 
         for err_set, data_set in zip((t_errs, v_errs), (training_data_paths, validation_data_paths)):
-            for i, t_path in enumerate(err_set):
+            for i, t_path in enumerate(data_set):
                 df = pd.read_csv(t_path, sep="\t", index_col=0, skiprows=2, header=0, usecols=[0, 1, 2],
                                  names=["timestep", "theta_deg", "pos_cm"])
                 init_state = np.zeros((2,))
@@ -472,7 +472,9 @@ class Tests:
                 err = np.sum(np.power(np.abs(sim.all_y[:df.shape[0]].flatten() - df.pos_cm / 100), err_pow))
                 err_set[i] = err
 
-
+        # TODO: Idealement on devrait garder les listes separees, j'y regarde plus tard
+        errs = np.concatenate((t_errs, v_errs))
+        plt.hist(errs, bins=50)
 
 
 if __name__ == "__main__":
@@ -742,11 +744,22 @@ if __name__ == "__main__":
     # Tests.plot_bb_test_output_and_sim(data_path, sim, "Comparaison experience vs. simulation")
     # plt.show()
 
+    # for key in expdata_dirs.keys():
+    #     for datafile in datafiles[key]:
+    #         data_path = os.path.join(expdata_dirs[key], datafile)
+    #         Tests.plot_bb_test_output_and_sim(data_path, sim, key + "_" + datafile)
+    #         print('"{}" is done'.format(data_path))
+
+    t_v_set = []
     for key in expdata_dirs.keys():
         for datafile in datafiles[key]:
             data_path = os.path.join(expdata_dirs[key], datafile)
-            Tests.plot_bb_test_output_and_sim(data_path, sim, key + "_" + datafile)
-            print('"{}" is done'.format(data_path))
+            t_v_set.append(data_path)
+    Tests.generate_distribution(t_v_set, [], sim)
+    plt.grid()
+    plt.xlabel("MSE")
+    plt.ylabel("Nombre de datasets")
+    plt.show()
     exit(42)
 
     # if input("'y' pour lancer l'optimisation, autre touche pour terminer: ").lower() != "y":
