@@ -254,12 +254,15 @@ class Tests:
         init_state[1] = (df.pos_cm[1] - df.pos_cm[0]) / dt / 100
         bbsimulator.simulate(lambda timestep, *args, **kwargs: np.deg2rad(df.theta_deg[timestep]),
                              command_noise_func, output_noise_func, n_steps=df.shape[0], init_state=init_state)
+        # Affichage de la MSE normalisee, temporaire
+        print(data_path, ":", np.sum(np.power(np.abs(sim.all_y[:df.shape[0]].flatten() - df.pos_cm / 100), 2)) / df.shape[0])
+        # Fin de l'affichage de la MSE normalisee
         fig, ((ax_pos), (ax_theta)) = plt.subplots(2, sharex=True)
         ax_pos.plot(df.index * dt, df.pos_cm / 100, label="Measured position [m]")
         ax_pos.plot(bbsimulator.all_t[:df.shape[0]], bbsimulator.all_y[:df.shape[0]], label="Simulated position [m]")
         ax_theta.plot(df.index * dt, df.theta_deg, label="Commanded angle (servo) [deg]")
-        ax_theta.plot(bbsimulator.all_t[:df.shape[0]], np.rad2deg(bbsimulator.all_u[:df.shape[0]]),
-                      label="Actual offset angle (servo) [deg]")
+        # ax_theta.plot(bbsimulator.all_t[:df.shape[0]], np.rad2deg(bbsimulator.all_u[:df.shape[0]]),
+        #               label="Actual offset angle (servo) [deg]")
         ax_pos.legend()
         ax_theta.legend()
         ax_pos.grid()
@@ -461,7 +464,7 @@ class Tests:
         v_errs = np.empty(len(validation_data_paths))
 
         for err_set, data_set in zip((t_errs, v_errs), (training_data_paths, validation_data_paths)):
-            for i, t_path in enumerate(err_set):
+            for i, t_path in enumerate(data_set):
                 df = pd.read_csv(t_path, sep="\t", index_col=0, skiprows=2, header=0, usecols=[0, 1, 2],
                                  names=["timestep", "theta_deg", "pos_cm"])
                 init_state = np.zeros((2,))
@@ -470,9 +473,11 @@ class Tests:
                 sim.simulate(lambda timestep, *args, **kwargs: np.deg2rad(df.theta_deg[timestep]),
                              n_steps=df.shape[0], init_state=init_state)
                 err = np.sum(np.power(np.abs(sim.all_y[:df.shape[0]].flatten() - df.pos_cm / 100), err_pow))
-                err_set[i] = err
+                err_set[i] = err / df.shape[0]  # Normaliser par rapport a la longueur du test
 
-
+        # TODO: Idealement on devrait garder les listes separees, j'y regarde plus tard
+        errs = np.concatenate((t_errs, v_errs))
+        plt.hist(errs, bins=50)
 
 
 if __name__ == "__main__":
@@ -729,7 +734,7 @@ if __name__ == "__main__":
     # Remplacer l'indice numerique dans la deuxieme ligne ci-dessous par l'indice du fichier de donnees
     # qu'on veut grapher.
     # expdata_dir = expdata_dirs["FWlt"]
-    # datafile = datafiles["FWlt"][4]
+    # datafile = datafiles["FWlt"][5]
 
     # Mettre a jour la representation des separateurs decimaux pour tous les fichiers
     # de donnees. Le changement sera applique a *tous* les fichiers contenus dans 'expdata_dir'.
@@ -741,12 +746,25 @@ if __name__ == "__main__":
     # data_path = os.path.join(expdata_dir, datafile)
     # Tests.plot_bb_test_output_and_sim(data_path, sim, "Comparaison experience vs. simulation")
     # plt.show()
+    # exit(42)
 
     for key in expdata_dirs.keys():
         for datafile in datafiles[key]:
             data_path = os.path.join(expdata_dirs[key], datafile)
             Tests.plot_bb_test_output_and_sim(data_path, sim, key + "_" + datafile)
             print('"{}" is done'.format(data_path))
+    exit(42)
+
+    t_v_set = []
+    for key in expdata_dirs.keys():
+        for datafile in datafiles[key]:
+            data_path = os.path.join(expdata_dirs[key], datafile)
+            t_v_set.append(data_path)
+    Tests.generate_distribution(t_v_set, [], sim)
+    plt.grid()
+    plt.xlabel("Normalized MSE")
+    plt.ylabel("Number of data files")
+    plt.show()
     exit(42)
 
     # if input("'y' pour lancer l'optimisation, autre touche pour terminer: ").lower() != "y":
@@ -769,6 +787,7 @@ if __name__ == "__main__":
     #     training_data_paths.extend(map(lambda file: os.path.join(expdata_dirs[group], file), training_sample))
     # print("TRAINING DATA:")
     # print("\n".join(training_data_paths))
+    # exit(42)
 
     # Noms des parametres sur lesquels on veut effectuer l'optimisation. Ces noms correspondent
     # aux cles du dictionnaire 'params' du simulateur.
