@@ -39,7 +39,7 @@ def multiple_positions(x_init, x_desired):
     """
 
     # Setup du simulateur et du controleur
-    kp, ki, kd = 5.13051124e+01, -1.59963530e-02, 9.82885344e+00
+    kp, ki, kd = 3.28299695e+01, -1.31468554e-02,  4.26750713e+01
     s = sim.BBThetaSimulator(buffer_size=x_desired.size * 20 + 1)
     c = cont.Obj5PIDBBController(s, kp, ki, kd, using_idiot_proofing=True)
 
@@ -75,12 +75,12 @@ def multiple_positions_avec_contraintes(x_init, x_1, x_2, v_max, v_min, perturba
 
     def si_perturbation(a_desired, x, v, alpha, t):
         return 0.01 * perturbation(100 * a_desired, 100 * x, 100 * v, np.rad2deg(alpha), t)
-
+    kp,ki,kd=3.28299695e+01, -1.31468554e-02,  4.26750713e+01
     # Setup du simulateur et du
     t = np.arange(0, 125, 0.05)  # 25s a semble suffisant pour n'importe quelle trajectoire (on met une marge de x5)
     n_steps = t.size
     s = sim.BBObj7Simulator(si_perturbation, buffer_size=n_steps + 1)
-    c = cont.Obj7Controller(s, np.deg2rad(50), x_1, x_2, v_min, v_max, using_idiot_proofing=True)
+    c = cont.Obj7Controller(s,kp, ki, kd, np.deg2rad(50), x_1, x_2, v_min, v_max, using_idiot_proofing=True)
 
     # Lancement de la simulation
     c.simulate(np.empty(t.shape), n_steps=n_steps, init_state=np.array([x_init, 0]))
