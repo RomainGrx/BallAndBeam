@@ -11,7 +11,8 @@ import matplotlib.pyplot as plt
 
 class Tests:
     """
-    Collection de methodes statiques en rapport avec les tests (creation, visualisation, etc.)
+    Collection de methodes statiques en rapport avec les tests (creation, visualisation, etc.). Rien de tres important
+    vis a vis du projet en lui-meme, juste des utilitaires pour se faciliter la vie.
     """
     @staticmethod
     def write_theta(out_path, theta):
@@ -254,15 +255,11 @@ class Tests:
         init_state[1] = (df.pos_cm[1] - df.pos_cm[0]) / dt / 100
         bbsimulator.simulate(lambda timestep, *args, **kwargs: np.deg2rad(df.theta_deg[timestep]),
                              command_noise_func, output_noise_func, n_steps=df.shape[0], init_state=init_state)
-        # Affichage de la MSE normalisee, temporaire
-        print(data_path, ":", np.sum(np.power(np.abs(sim.all_y[:df.shape[0]].flatten() - df.pos_cm / 100), 2)) / df.shape[0])
-        # Fin de l'affichage de la MSE normalisee
+
         fig, ((ax_pos), (ax_theta)) = plt.subplots(2, sharex=True)
         ax_pos.plot(df.index * dt, df.pos_cm / 100, label="Measured position [m]")
         ax_pos.plot(bbsimulator.all_t[:df.shape[0]], bbsimulator.all_y[:df.shape[0]], label="Simulated position [m]")
         ax_theta.plot(df.index * dt, df.theta_deg, label="Commanded angle (servo) [deg]")
-        # ax_theta.plot(bbsimulator.all_t[:df.shape[0]], np.rad2deg(bbsimulator.all_u[:df.shape[0]]),
-        #               label="Actual offset angle (servo) [deg]")
         ax_pos.legend()
         ax_theta.legend()
         ax_pos.grid()
@@ -276,8 +273,8 @@ class Tests:
         fig.suptitle(data_path if title is None else title, fontsize=14)
 
         # <SAVEFIG> Decommenter pour sauvegarder l'image
-        fig.savefig("../Data/All_Data_Images_errpow2_80pct_staticfix/{}.png".format(title))
-        plt.close()
+        # fig.savefig("../Data/All_Data_Images_errpow2_80pct_staticfix/{}.png".format(title))
+        # plt.close()
         # </SAVEFIG>
 
         return fig, ax_pos, ax_theta
@@ -323,9 +320,9 @@ class Tests:
                                      'bbsimulator.simulate'.
         :return                    : Objet 'OptimizationResult' contenant le resultat de l'optimisation.
         """
-
         # Memoization pour un leger speedup
         already_seen = {}
+
         def err_func(param_values):
             """
             Fonction retournant la somme des erreurs sur l'ensemble des fichiers de test. On desire minimiser
@@ -382,7 +379,7 @@ class Tests:
                     init_params[i] = 0.5 * (bound[1] - bound[0]) * (1 + init_params[i])
 
         # Methodes possibles avec 'bounds': "TNC", "L-BFGS-B", "SLSQP", "trust-constr"
-        return opt.minimize(err_func, np.array(init_params), method=method, bounds=bounds)
+        return opt.minimize(err_func, np.array(init_params), method=method, bounds=bounds, tol=tol)
 
     @staticmethod
     def fit_static_friction(training_data_paths, bbsimulator, Ns=1000, err_pow=2,
@@ -460,6 +457,8 @@ class Tests:
 
     @staticmethod
     def generate_distribution(training_data_paths, validation_data_paths, sim, err_pow=2):
+        # Fonction utilisee pour generer l'histogramme dans le rapport. Permet de visualiser la repartirion
+        # de la MSE parmis les fichiers de donnees, et ce apres avoir fait le fit du simulateur.
         t_errs = np.empty(len(training_data_paths))
         v_errs = np.empty(len(validation_data_paths))
 
@@ -475,11 +474,13 @@ class Tests:
                 err = np.sum(np.power(np.abs(sim.all_y[:df.shape[0]].flatten() - df.pos_cm / 100), err_pow))
                 err_set[i] = err / df.shape[0]  # Normaliser par rapport a la longueur du test
 
-        # TODO: Idealement on devrait garder les listes separees, j'y regarde plus tard
         errs = np.concatenate((t_errs, v_errs))
         plt.hist(errs, bins=50)
 
 
+# La suite du code ne sera executee que si le fichier 'Tests.py' est lance directement. Elle ne le sera pas si ce
+# fichier est utilise comme import dans un autre fichier. La section ci-dessous sert de code de demonstration pour
+# l'utilisation des classes implementees ci-dessus.
 if __name__ == "__main__":
     from BBSimulators import BBThetaSimulator
     import random
@@ -491,24 +492,6 @@ if __name__ == "__main__":
     # Creation du simulateur que l'on veut optimiser
     DT = 0.05
     sim = BBThetaSimulator()
-
-    # Ici, on peut modifier certains parametres du simulateur. C'est pratique quand
-    # on veut appliquer des parametres issus d'une minimisation de l'erreur sans
-    # forcement changer les valeurs par defaut dans les classes.
-
-    # A optimiser avec 'Tests.fit_bb_sim_params'
-    sim.params["theta_offset"] = -1.22168637e-01
-    sim.params["ff_pow"] = 1.57403518e+00
-    sim.params["m"] = 4.07577970e-01
-    sim.params["r"] = 4.50930559e-02
-    sim.params["g"] = 8.90574462e+01
-    sim.params["rho"] = 2.87279734e+00
-    sim.params["kf"] = 9.12765693e+01
-    sim.params["jb"] = 5.08989712e-02
-
-    # A optimiser avec 'Tests.fit_static_friction'
-    sim.params["stat_bound"] = 0.12272812
-    sim.params["stat_spd_coeff"] = 0.036
 
     # Dossier de base contenant tous les fichiers de donnees experimentales
     # (et rien d'autre, sinon probleme avec la fonction 'Tests.update_decimal_sep_dir').
@@ -733,8 +716,8 @@ if __name__ == "__main__":
     # Remplacer la key dans les deux lignes ci-dessous (doit etre la meme key dans le deux lignes)
     # Remplacer l'indice numerique dans la deuxieme ligne ci-dessous par l'indice du fichier de donnees
     # qu'on veut grapher.
-    # expdata_dir = expdata_dirs["FWlt"]
-    # datafile = datafiles["FWlt"][5]
+    expdata_dir = expdata_dirs["FWlt"]
+    datafile = datafiles["FWlt"][5]
 
     # Mettre a jour la representation des separateurs decimaux pour tous les fichiers
     # de donnees. Le changement sera applique a *tous* les fichiers contenus dans 'expdata_dir'.
@@ -743,29 +726,32 @@ if __name__ == "__main__":
 
     # Affichage d'un graphe qui compare les vrais resultats experimentaux et les resultats de la
     # simulation pour le fichier 'datafile' choisi.
-    # data_path = os.path.join(expdata_dir, datafile)
-    # Tests.plot_bb_test_output_and_sim(data_path, sim, "Comparaison experience vs. simulation")
-    # plt.show()
+    data_path = os.path.join(expdata_dir, datafile)
+    Tests.plot_bb_test_output_and_sim(data_path, sim, "Comparaison experience vs. simulation")
+    plt.show()
+    exit()
+
+    # Generation d'un dossier contenant toutes les images comparatives, pour chaque fichier de donnees, afin de
+    # pouvoir evaluer la performance du simulateur de maniere un peu plus visuelle qu'avec un chiffre.
+    # for key in expdata_dirs.keys():
+    #     for datafile in datafiles[key]:
+    #         data_path = os.path.join(expdata_dirs[key], datafile)
+    #         Tests.plot_bb_test_output_and_sim(data_path, sim, key + "_" + datafile)
+    #         print('"{}" is done'.format(data_path))
     # exit(42)
 
-    for key in expdata_dirs.keys():
-        for datafile in datafiles[key]:
-            data_path = os.path.join(expdata_dirs[key], datafile)
-            Tests.plot_bb_test_output_and_sim(data_path, sim, key + "_" + datafile)
-            print('"{}" is done'.format(data_path))
-    exit(42)
-
-    t_v_set = []
-    for key in expdata_dirs.keys():
-        for datafile in datafiles[key]:
-            data_path = os.path.join(expdata_dirs[key], datafile)
-            t_v_set.append(data_path)
-    Tests.generate_distribution(t_v_set, [], sim)
-    plt.grid()
-    plt.xlabel("Normalized MSE")
-    plt.ylabel("Number of data files")
-    plt.show()
-    exit(42)
+    # Generation de l'histogramme contenu dans le rapport
+    # t_v_set = []
+    # for key in expdata_dirs.keys():
+    #     for datafile in datafiles[key]:
+    #         data_path = os.path.join(expdata_dirs[key], datafile)
+    #         t_v_set.append(data_path)
+    # Tests.generate_distribution(t_v_set, [], sim)
+    # plt.grid()
+    # plt.xlabel("Normalized MSE")
+    # plt.ylabel("Number of data files")
+    # plt.show()
+    # exit(42)
 
     # if input("'y' pour lancer l'optimisation, autre touche pour terminer: ").lower() != "y":
     #     exit(0)
@@ -812,7 +798,8 @@ if __name__ == "__main__":
     #                               init_params=init_params)
     # exec_time = time.time() - start_time
 
-    # Definition de la zone de recherche de la brute force:
+    # Definition de la zone de recherche de la brute force pour l'optimisation des parametres en lien avec le
+    # frottement statique:
     # ranges = ((0.13636458 * 0.9, 0.13636458 * 1.1), (0.018 * 0.5, 0.018 * 2))
     # ranges = ((0.12272812 * 0.9, 0.12272812 * 1.1), (0.036 * 0.9, 0.036 * 1.1))
 
