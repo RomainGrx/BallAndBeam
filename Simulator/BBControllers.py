@@ -251,10 +251,21 @@ class Obj7Controller(BBController):
     l'etape de "trajectoire", en revanche, on utilise une nouvelle loi de commande qui permet de maintenir une vitesse
     adequate, comprise dans les limites specifiees par 'v_min' et 'v_max'.
     """
-    def __init__(self, sim, kp, ki, kd, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True):
+    def __init__(self, sim, kp, ki, kd, x_1, x_2, v_min, v_max, using_idiot_proofing=True):
         super().__init__(sim)
         self.using_idiot_proofing = using_idiot_proofing
-        self.k = k
+
+        # Calcul du gain sur base de donnees experimentales de "ce qui fonctionne bien comme gain"
+        k_dict = {4: 5, 5: 7, 6: 10, 7: 12, 8: 15, 9: 15, 10: 18, 11: 18, 12: 18, 13: 20, 14: 20, 15: 22, 16: 25,
+                  17: 30, 18: 30, 19: 35, 20: 35, 21: 40, 22: 50, 23: 50, 24: 50, 25: 50, 26: 50}
+        v_mean = 0.5 * (v_min + v_max) * 100
+        best = np.inf
+        for key in k_dict.keys():
+            diff = abs(key - v_mean)
+            if diff < best:
+                best = diff
+                self.k = np.deg2rad(k_dict[key])
+
         self.x_1, self.x_2, self.v_min, self.v_max = x_1, x_2, v_min, v_max
         self.kp, self.ki, self.kd = kp, ki, kd
 
@@ -281,7 +292,7 @@ class Obj7Controller(BBController):
 
         # Calcul d'une position initiale permettant d'accelerer suffisamment avant d'atteindre 'x_1'
         k_sp = 0.95  # Coefficient de "securite" par rapport aux v_min et v_max
-        start_pos = x_1 - np.sign(x_2 - x_1) * (v_min + k_sp * delta_v) ** 2 / 0.107
+        start_pos = x_1 - np.sign(x_2 - x_1) * (v_min + k_sp * delta_v) ** 2 / 0.7
         if start_pos > 0:
             start_pos += 0.01
         if start_pos < 0:
@@ -322,7 +333,6 @@ class Obj7Controller(BBController):
                 raw_command = 0 - theta_offset
             else:
                 # Calcul de la commande: nulle quand |speed| = k_sp * v_max, egale a +-k quand |speed| = k_sp * v_min
-                # print("speed", speed)
                 raw_command = k * np.sign(x_1 - x_2) * (v_min + delta_v / 2 * (1 + k_sp) - abs(speed)) /\
                               (k_sp * delta_v) - theta_offset
 
@@ -473,7 +483,7 @@ def launch_fit_pid(t, sim):
 # l'utilisation des classes implementees ci-dessus.
 if __name__ == "__main__":
     # Definition du vecteur de temps: la simulation durera de t = 0s a t = 30s, et on utilise un pas de temps dt = 50ms
-    t = np.arange(0, 120, 0.05)
+    t = np.arange(0, 10, 0.05)
 
     # Dans le cas ou l'on teste ou l'objectif 7, decommenter cette fonction et definir la perturbation
     # def perturbation(a_desired, x, v, alpha, t):
@@ -514,7 +524,7 @@ if __name__ == "__main__":
     # Il faut choisir un setpoint. Dans le cas des objectifs 3, 6 et 7, le setpoint importe peu et il ne sert qu'a
     # determiner la duree de la simulation. Dans le cas des objectifs 4 et 5, le setpoint est la trajectoire que l'on
     # va tenter de suivre. Decommenter pour choisir:
-    setpoint = np.full(t.shape, 0.25)                 # Setpoint constant
+    setpoint = np.full(t.shape, 0.3)                 # Setpoint constant
     # setpoint = 0.15 * np.sin(2 * np.pi * t / 12)      # Setpoint = sinus
     # setpoint = 0.15 * sig.square(2 * np.pi * t / 20)  # Setpoint = carre
     # setpoint = 0.5 * np.sin(2 * np.pi * t / 40)       # Setpoint = sinus
@@ -532,9 +542,9 @@ if __name__ == "__main__":
     # De meme, la vitesse maximale que la bille peut atteindre est 8 cm/s dans ce simulateur. Imposer v_min > 0.08
     # bloque donc le systeme.
     # Pour tester l'objectif 6 ou l'objectif 7, decommenter les lignes ci-dessous:
-    k, x_1, x_2, v_min, v_max = np.deg2rad(50), 0, 0.32, 0.07, 0.08
+    x_1, x_2, v_min, v_max = 0.0, 0.32, 0.21, 0.25
     kp, ki, kd = 1.88700101e+01, -1.93159758e-03, 7.47877146e+00
-    cont = Obj7Controller(sim, kp, ki, kd, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
+    cont = Obj7Controller(sim, kp, ki, kd, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
 
     # Lancement de la simulation avec controle. L'etat initial [position, vitesse] (unites SI) peut etre modifie:
     cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([-0, 0]))
