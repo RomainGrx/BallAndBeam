@@ -81,7 +81,7 @@ def multiple_positions_avec_contraintes(x_init, x_1, x_2, v_max, v_min, perturba
     t = np.arange(0, 125, 0.05)  # 25s a semble suffisant pour n'importe quelle trajectoire (on met une marge de x5)
     n_steps = t.size
     s = sim.BBObj7Simulator(si_perturbation, buffer_size=n_steps + 1)
-    c = cont.Obj7Controller(s,kp, ki, kd, np.deg2rad(50), x_1, x_2, v_min, v_max, using_idiot_proofing=True)
+    c = cont.Obj7Controller(s,kp, ki, kd, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
 
     # Lancement de la simulation
     c.simulate(np.empty(t.shape), n_steps=n_steps, init_state=np.array([x_init, 0]))
@@ -99,10 +99,10 @@ if __name__ == "__main__":
     # Pour tester l'objectif #3
     # test_function = "idiot_proof_test"
 
-    # Pour tester l'objectif #5
+    # Pour tester l'objectif #4 ou #5
     # test_function = "multiple_positions"
 
-    # Pour tester l'objectif #6 ou l'objectif #7 (dans ce cas, activer la fonction 'perturbation' ci-dessous)
+    # Pour tester l'objectif #6 ou l'objectif #7 (dans ce cas, utiliser la fonction 'perturbation' ci-dessous)
     test_function = "multiple_positions_avec_contraintes"
 
     # Pour tester l'objectif #7
@@ -110,16 +110,14 @@ if __name__ == "__main__":
         # Unites: [cm/s^2], [cm], [cm/s], [deg], [s]; Retour: [cm/s^2]
         return a_desired
 
-
     if test_function == "idiot_proof_test":
         # Test de la fonction d'interface 'idiot_proof_test'
         x_init = 10
         t = np.arange(0, 60, 0.05)
         u = 40 * sig.square(2 * np.pi * t / 15, 0.5)
         y = idiot_proof_test(x_init, u, flag_idiot_proof=True)
-        plt.plot(t, y, t, u)
-        plt.grid()
-        plt.show()
+        plt.plot(t, y, label="Position [cm]")
+        plt.plot(t, u, label="Commanded angle (servo) [deg]")
 
     elif test_function == "multiple_positions":
         # Test de la fonction d'interface 'multiple_positions'
@@ -127,9 +125,8 @@ if __name__ == "__main__":
         x_desired = np.repeat(np.arange(-45, 45 + 1, 5), 5)
         y = multiple_positions(x_init, x_desired)
         t = np.arange(0, x_desired.size, 0.05)
-        plt.plot(t, y, t, np.repeat(x_desired, 20))
-        plt.grid()
-        plt.show()
+        plt.plot(t, y, label="Position [cm]")
+        plt.plot(t, np.repeat(x_desired, 20), label="Setpoint [cm]")
 
     elif test_function == "multiple_positions_avec_contraintes":
         # Test de la fonction d'interface 'multiple_positions_avec_contraintes'
@@ -137,8 +134,12 @@ if __name__ == "__main__":
         x_1, x_2, v_min, v_max = 20, -5, 3, 4
         y = multiple_positions_avec_contraintes(x_init, x_1, x_2, v_max, v_min, perturbation)
         t = np.arange(0, 125, 0.05)
-        plt.plot(t, y)
-        plt.plot(t, np.full(t.shape, x_1), "r--")
+        plt.plot(t, y, label="Position [cm]")
+        plt.plot(t, np.full(t.shape, x_1), "r--", label="$x_1$ and $x_2$")
         plt.plot(t, np.full(t.shape, x_2), "r--")
-        plt.grid()
-        plt.show()
+
+    plt.xlabel("Time [s]")
+    plt.ylabel("Position [cm] / Angle [deg]")
+    plt.legend()
+    plt.grid()
+    plt.show()
