@@ -472,7 +472,11 @@ class Tests:
                 sim.simulate(lambda timestep, *args, **kwargs: np.deg2rad(df.theta_deg[timestep]),
                              n_steps=df.shape[0], init_state=init_state)
                 err = np.sum(np.power(np.abs(sim.all_y[:df.shape[0]].flatten() - df.pos_cm / 100), err_pow))
-                err_set[i] = err / df.shape[0]  # Normaliser par rapport a la longueur du test
+                err /= df.shape[0]  # Normaliser par rapport a la longueur du test
+
+                # Retirer l'outlier
+                if err <= 0.20:
+                    err_set[i] = err
 
         errs = np.concatenate((t_errs, v_errs))
         plt.hist(errs, bins=50)
@@ -716,8 +720,8 @@ if __name__ == "__main__":
     # Remplacer la key dans les deux lignes ci-dessous (doit etre la meme key dans le deux lignes)
     # Remplacer l'indice numerique dans la deuxieme ligne ci-dessous par l'indice du fichier de donnees
     # qu'on veut grapher.
-    expdata_dir = expdata_dirs["FWlt"]
-    datafile = datafiles["FWlt"][5]
+    # expdata_dir = expdata_dirs["FWlt"]
+    # datafile = datafiles["FWlt"][5]
 
     # Mettre a jour la representation des separateurs decimaux pour tous les fichiers
     # de donnees. Le changement sera applique a *tous* les fichiers contenus dans 'expdata_dir'.
@@ -726,10 +730,10 @@ if __name__ == "__main__":
 
     # Affichage d'un graphe qui compare les vrais resultats experimentaux et les resultats de la
     # simulation pour le fichier 'datafile' choisi.
-    data_path = os.path.join(expdata_dir, datafile)
-    Tests.plot_bb_test_output_and_sim(data_path, sim, "Comparaison experience vs. simulation")
-    plt.show()
-    exit()
+    # data_path = os.path.join(expdata_dir, datafile)
+    # Tests.plot_bb_test_output_and_sim(data_path, sim, "Comparaison experience vs. simulation")
+    # plt.show()
+    # exit()
 
     # Generation d'un dossier contenant toutes les images comparatives, pour chaque fichier de donnees, afin de
     # pouvoir evaluer la performance du simulateur de maniere un peu plus visuelle qu'avec un chiffre.
@@ -741,17 +745,17 @@ if __name__ == "__main__":
     # exit(42)
 
     # Generation de l'histogramme contenu dans le rapport
-    # t_v_set = []
-    # for key in expdata_dirs.keys():
-    #     for datafile in datafiles[key]:
-    #         data_path = os.path.join(expdata_dirs[key], datafile)
-    #         t_v_set.append(data_path)
-    # Tests.generate_distribution(t_v_set, [], sim)
-    # plt.grid()
-    # plt.xlabel("Normalized MSE")
-    # plt.ylabel("Number of data files")
-    # plt.show()
-    # exit(42)
+    t_v_set = []
+    for key in expdata_dirs.keys():
+        for datafile in datafiles[key]:
+            data_path = os.path.join(expdata_dirs[key], datafile)
+            t_v_set.append(data_path)
+    Tests.generate_distribution(t_v_set, [], sim)
+    plt.grid()
+    plt.xlabel("Normalized MSE")
+    plt.ylabel("Number of data files")
+    plt.show()
+    exit(42)
 
     # if input("'y' pour lancer l'optimisation, autre touche pour terminer: ").lower() != "y":
     #     exit(0)
