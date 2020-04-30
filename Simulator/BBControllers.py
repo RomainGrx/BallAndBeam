@@ -244,11 +244,12 @@ class Obj7Controller(BBController):
     Classe qui implemente un controleur assez simple pour les objectifs 6 et 7, tout en maintenant l'idiot-proofing
     developpe dans le controleur PID de l'objectif 3.
     """
-    def __init__(self, sim, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True):
+    def __init__(self, sim, kp, ki, kd, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True):
         super().__init__(sim)
         self.using_idiot_proofing = using_idiot_proofing
         self.k = k
         self.x_1, self.x_2, self.v_min, self.v_max = x_1, x_2, v_min, v_max
+        self.kp, self.ki, self.kd = kp, ki, kd
 
     @Simulator.command_limiter(low_bound=np.deg2rad(-50), up_bound=np.deg2rad(50))
     def control_law(self, ref, pos, dt, u_1, flags_1):
@@ -295,7 +296,7 @@ class Obj7Controller(BBController):
                 # Dans cette situation, la contrainte de vitesse ne s'applique pas
                 # On ne doit pas forcement se stabiliser a 'start_pos', on peut donc utiliser un controleur plus simple
                 # Controle PID
-                kp, ki, kd = 3.28299695e+01, -1.31468554e-02,  4.26750713e+01
+                kp, ki, kd = self.kp, self.ki, self.kd 
                 err = pos - start_pos * 1.10
                 deriv_err = (err - self.flags[3]) / dt
                 self.flags[2] += err * dt
@@ -499,7 +500,7 @@ def launch_fit_pid(sim):
 
 
 if __name__ == "__main__":
-    t = np.arange(0, 100, 0.05)  # Simulation d'un certain nombre de secondes (cf. 2e argument)
+    t = np.arange(0, 20, 0.05)  # Simulation d'un certain nombre de secondes (cf. 2e argument)
     sim = BBThetaSimulator(dt=0.05, buffer_size=t.size + 1)
     n_steps = t.size
 
@@ -525,7 +526,7 @@ if __name__ == "__main__":
     # De meme, la vitesse maximale que la bille peut atteindre est 0.08 cm/s dans ce simulateur. Imposer v_min > 0.08
     # bloque donc le systeme.
 
-    k, x_1, x_2, v_min, v_max = np.deg2rad(50), 0.0, 0.30, 0.03, 0.035
+    k, x_1, x_2, v_min, v_max= np.deg2rad(50), 0.0, 0.32, 0.07, 0.08
 
     def perturbation(a_desired, x, v, alpha, t):
         """
@@ -539,22 +540,23 @@ if __name__ == "__main__":
         :param t         : Temps depuis le debut de la simulation [s]
         :return          : Valeur de l'acceleration forcee de la bille [m/s^2]
         """
-        if 5 < t < 7:
-            return -0.15
-        if 19 < t < 21:
-            return a_desired + np.random.random() * np.random.choice([-1, 1]) * 0.1
+        
+        #if 5 < t < 7:
+         #   return -0.15
+        #if 19 < t < 21:
+         #   return a_desired + np.random.random() * np.random.choice([-1, 1]) * 0.1
         # if 5 < t < 8 or 11 < t < 13:
         #     return a_desired + np.random.random() * np.random.choice([-1, 1]) * 0.2
         return a_desired
 
-    # sim = BBObj7Simulator(perturbation, dt=0.05, buffer_size=t.size + 1)
-    # cont = Obj7Controller(sim, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
+    sim = BBObj7Simulator(perturbation, dt=0.05, buffer_size=t.size + 1)
+    cont = Obj7Controller(sim, kp, ki, kd, k, x_1, x_2, v_min, v_max, using_idiot_proofing=True)
 
     cont.simulate(setpoint, n_steps=n_steps, init_state=np.array([-0.1, 0.0]))
 
     # Test *semi-automatique* de la contrainte de vitesse: inserer manuellement des valeurs de temps pour 't_1' et 't_2'
     # 't_i' = temps auquel la bille se trouve au point 'x_i' de la trajectoire (i = 1 ou 2)
-    t_1, t_2 = 17.2, 22.2
+    t_1, t_2 = 4.0, 9
     trajectory_indices = np.bitwise_and(t_1 <= t, t <= t_2)
     traj_speeds = np.absolute(np.diff(sim.all_y.flatten()[:-1][trajectory_indices]) / sim.dt)
     print("SUCCESS" if np.all(np.bitwise_and(v_min <= traj_speeds, traj_speeds <= v_max)) else "FAILURE", end=" ")
