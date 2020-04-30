@@ -31,18 +31,18 @@ class BBSimulator(Simulator):
     """
     def __init__(self, dt=0.05, buffer_size=10000):
         params = {
-            "m": 1.39728756e-01,   # Masse de la bille [kg]
-            "r": 30 / 1000,        # Rayon de la bille [m]
-            "g": 9.81,             # Acceleration gravitationnelle a basse altitude [m/s^2]
-            "rho": 1000,           # Masse volumique de l'eau [kg/m^3]
-            "l": 0.775,            # Longueur de la poutre [m]
-            "d": 55 / 1000,        # Longueur de la premiere barre attachee au servo [m]
-            "b": 150 / 1000,       # Distance entre le pivot et le point d'attache du second bras du servo [m]
-            "kf": 1.63537967e+01,  # Coefficient de frottement obtenu par optimisation experimentale []
-            "jb": 8.29530009e-04,  # Moment d'inertie de la bille obtenu par optimisation experimentale [kg*m^2]
+            "m": 4.07577970e-01,     # Masse de la bille [kg]
+            "r": 4.50930559e-02,     # Rayon de la bille [m]
+            "g": 8.90574462e+01,     # Acceleration gravitationnelle a basse altitude [m/s^2]
+            "rho": 2.87279734e+00,   # Masse volumique de l'eau [kg/m^3]
+            "l": 0.775,              # Longueur de la poutre [m]
+            "d": 55 / 1000,          # Longueur de la premiere barre attachee au servo [m]
+            "b": 150 / 1000,         # Distance entre le pivot et le point d'attache du second bras du servo [m]
+            "kf": 9.12765693e+01,    # Coefficient de frottement obtenu par optimisation experimentale []
+            "jb": 5.08989712e-02,    # Moment d'inertie de la bille obtenu par optimisation experimentale [kg*m^2]
         }
 
-        params["v"] = 4/3 * np.pi * params["r"]**3         # Volume de la bille [m^3]
+        params["v"] = 4/3 * np.pi * params["r"] ** 3  # Volume de la bille [m^3]
         n_states, n_commands, n_outputs = 2, 1, 1
         super().__init__(params, n_states, n_commands, n_outputs, dt, buffer_size)
 
@@ -63,7 +63,7 @@ class BBSimpleSimulator(BBSimulator):
         m, x, g, r = self.params["m"], self.all_x[self.timestep], self.params["g"], self.params["r"]
         jb, alpha, dalpha_dt = self.params["jb"], self.all_u[self.timestep], self.dudt()
         dx1_dt = x[1]
-        dx2_dt = ((m * x[0] * dalpha_dt**2 - m * g * np.sin(alpha)) / (jb / r**2 + m))[0]
+        dx2_dt = ((m * x[0] * dalpha_dt ** 2 - m * g * np.sin(alpha)) / (jb / r ** 2 + m))[0]
         return np.array([dx1_dt, dx2_dt])
 
 
@@ -128,16 +128,14 @@ class BBThetaSimulator(BBAlphaSimulator):
                - Si la balle est a l'arret et que abs('theta') < 'stat_bound', alors la balle reste a l'arret;
                - Si la valeur de 'stat_spd_coeff' est egale a 'v', alors, a angle nul, la bille s'arretera quand la
                  valeur absolue de sa vitesse est inferieure a 'v'.
-           Les valeurs par defaut de ces parametres sont obtenues de maniere experimentale:
-               - 'stat_bound' = -7deg;
-               - 'stat_spd_coeff' = 0.05.  (0.05 correspond a des m/s)
+           Les valeurs par defaut de ces parametres sont obtenues de maniere experimentale
 
         4) Il y a une gestion de la non-linearite des forces de frottement par rapport a la norme de la vitesse.
-           On modelise cela avec un parametre 'ff_pow' dont la valeur par defaut est de 2.23113062e+00, suite a
-           une optimisation sur des donnees experimentales.
+           On modelise cela avec un parametre 'ff_pow' dont la valeur est obtenur suite a une optimisation sur des
+           donnees experimentales.
 
         Note: certains de ces parametres en cachent d'autres. Il n'est pas anormal d'observer des forces de
-              de frottement super-quadratiques quand on sait que les phenomenes d'ecoulement turbulent (etc.) n'ont
+              de frottement super-lineaires quand on sait que les phenomenes d'ecoulement turbulent (etc.) n'ont
               pas ete rigoureusement modelises.
 
         Note: L'offset est pris en compte dans 'all_u'.
@@ -146,14 +144,14 @@ class BBThetaSimulator(BBAlphaSimulator):
     def __init__(self, dt=0.05, buffer_size=10000):
         super().__init__(dt, buffer_size)
         # Parametre pour la gestion de l'offset de l'angle
-        self.params["theta_offset"] = -1.07698393e-01  # Quand on commande theta = 0 deg, on aura theta = -6.17 deg
+        self.params["theta_offset"] = -1.22168637e-01  # Quand on commande theta = 0 deg, on aura theta = -7 deg
 
         # Parametres pour la simulation du frottement statique
-        self.params["stat_bound"] = np.deg2rad(7)  # Vitesse nulle: la bille s'arrete quand abs(theta) < 7deg
-        self.params["stat_spd_coeff"] = 0.05  # A angle 0, la balle s'arrete si v < 0.05 m/s
+        self.params["stat_bound"] = 0.12272812  # Vitesse nulle: la bille s'arrete quand abs(theta) < ~7deg
+        self.params["stat_spd_coeff"] = 0.036  # A angle 0, la balle s'arrete si v < 0.036 m/s
 
         # Parametre pour la gestion de la non-linearite du frottement par rapport a la vitesse
-        self.params["ff_pow"] = 2.23113062e+00  # Les frottements dependent de la vitesse**ff_pow
+        self.params["ff_pow"] = 1.57403518e+00  # Les frottements dependent de la vitesse ** ff_pow
 
     def dxdt(self):
         stat_bound, stat_spd_coeff = self.params["stat_bound"], self.params["stat_spd_coeff"]
@@ -184,10 +182,29 @@ class BBThetaSimulator(BBAlphaSimulator):
 
 
 class BBObj7Simulator(BBThetaSimulator):
-    """Simulateur qui fonctionne comme BBThetaSimulator, sauf que l'acceleration 'dx2_dt' est calculee par une
-    fonction de perturbation comme specifiee dans l'objectif 7 (mail)
-    TODO: faire une plus belle docstring"""
+    """
+    Simulateur pour le Ball and Beam qui se base sur 'BBThetaSimulator'. L'ajout qui est fait dans cette class-ci est de
+    permettre d'utiliser une fonction 'perturbation' afin d'agir sur l'acceleration. Cette fonction est decrite comme
+    suit:
+            a = perturbation(a_desired, x, v, alpha, t)
 
+            Fonction de perturbation qui permet de forcer l'acceleration de la bille. L'acceleration non-forcee est
+            'a_desired'. Pour rendre cette fonction sans effet, faire 'return a_desired'.
+
+            :param a_desired : Valeur de l'acceleration de la bille issue du modele physique [m/s^2]
+            :param x         : Position de la bille [m]
+            :param v         : Vitesse de la bille [m/s]
+            :param alpha     : Angle du servo (pas de la poutre!) [rad]
+            :param t         : Temps depuis le debut de la simulation [s]
+            :return          : Valeur de l'acceleration forcee de la bille [m/s^2]
+
+            Note: Ici, on travaille en unites SI. Ce n'est pas le cas dans la fonction d'interface du fichier
+                  'Interface.py', dans lequel on travaille en cm et en deg, comme demande dans les consignes.
+
+    Cette fonction de perturbation est l'unique modification faite au simulateur 'BBThetaSimulator'. Elle doit etre
+    utilisee avec precaution car elle a une priorite maximale. Il est donc possible de modifier completement la
+    dynamique du systeme avec cette fonction, rendant le simulateur 'BBThetaSimulator' inutile.
+    """
     def __init__(self, perturbation=lambda *args: args[0], dt=0.05, buffer_size=10000):
         super().__init__(dt, buffer_size)
         self.perturbation = perturbation
@@ -201,70 +218,106 @@ class BBObj7Simulator(BBThetaSimulator):
         return np.array([dx1_dt, self.perturbation(dx2_dt, pos, spd, theta, t)])
 
 
+# La suite du code ne sera executee que si le fichier 'BBSimulators.py' est lance directement. Elle ne le sera pas si ce
+# fichier est utilise comme import dans un autre fichier. La section ci-dessous sert de code de demonstration pour
+# l'utilisation des classes implementees ci-dessus.
+#
+# Note importante: ci-dessous, on retrouve des tests des differents simulateurs. Un simulateur n'est pas un controleur
+# et il ne faut donc pas s'attendre a voir des artifices de controle tels que de l'idiot-proofing ici. Le controle se
+# passe plus tard, dans le fichier 'BBControllers.py'.
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    import scipy.signal as sig
-
-    # Rappel important: ici, on a une commande "forte": l'angle est 100% commande
-    # et si on le met a 0 et que la balle est initialement immobile, alors il ne
-    # se passera rien de plus car l'angle sera maintenu a 0. Cela sera aussi le cas
-    # si la balle est initialement decentree.
-    # Cela signifie aussi que rien ne nous empeche de passer de (e.g.) +30deg a -30deg de maniere
-    # instantanee, ce qui n'est pas realiste. Il faut en tenir compte lors des tests.
-
-    # Note: Mettre un signal carre en entree engendrera une derivee de theta tres grande.
-    # Puisque la vitesse depend de cette derivee, on observera un "catapultage" de la balle.
-    # On observera ce catapultage uniquement si la balle est decentree, ce qui est coherent.
+    import scipy.signal as sig       # Pratique pour generer des signaux carres
 
     # Fonction de commande dont la sortie est bridee entre -50deg et +50deg.
-    # Decommenter les diverses lois de commande pour observer des comportements differents.
+    # Rappel: le retour de cette fonction est exprime en radians -> utiliser np.deg2rad
     @Simulator.command_limiter(low_bound=np.deg2rad(-50), up_bound=np.deg2rad(50))
     def my_command_func(timestep, params, all_t, all_u, all_y, dt):
         # Donnees utilisables jusqu'a l'indice [timestep - 1]
         t = timestep * dt
-        # return 0pas
-        return np.deg2rad(50)
-        # return np.array([-np.pi / 6])
-        # return np.sin(t * 1) * (-np.pi / 2)
-        # return np.sin(t * 1) * np.deg2rad(-50)
-        # return all_u[timestep] + (np.random.random(1) * 2 - 1) * 0.05
-        # return np.sin(t * 10) * (-np.pi / 6)
-        # return np.sin(t * 1) * (-np.pi / 6) * t
-        # return sig.square(t * 1, duty=0.5) * (-np.pi / 12)
-        # return sig.square(t * 1, duty=0.5) * (-np.pi / 12) + np.pi / 12
-        # return = (all_y[timestep - 1] - 0.42) * 2
 
-    # Fonction de bruit aleatoire (distribution uniforme) sur la commande.
+        # Decommenter les diverses lois de commande pour observer des comportements differents.
+
+        # Commande nulle constante
+        # return 0
+
+        # Commande constante a +50deg
+        # return np.deg2rad(50)
+
+        # Commande de sinus d'amplitude a [rad] et de periode p [s]
+        # a, p = np.deg2rad(50), 10
+        # return np.sin(t * 2 * np.pi / p) * a
+
+        # Commande de signal carre d'amplitude a [rad], de periode p [s] et de duty_cycle d [%]
+        a, p, d = np.deg2rad(50), 10, 50
+        return sig.square(t * 2 * np.pi / p, duty=d/100) * a
+
+    # Fonction de bruit sur la commande
     def my_command_noise_func(timestep, params, all_t, all_u, all_y, dt):
-        return 0
-        # return (2 * np.random.random(1) - 1) * np.deg2rad(3)  # Erreur de +- 3deg a la commande du servo
+        # Decommenter pour tester diverses fonctions de bruit
 
-    # Fonction de bruit aleatoire (distribution uniforme) sur la mesure de la position.
-    def my_output_noise_func(timestep, params, all_t, all_u, all_y, dt):
+        # Pas de bruit: commande parfaitement fidele
         return 0
+
+        # Erreur uniformement distribuee entre -3deg et +3deg lors de l'application de la commande
+        # return (2 * np.random.random(1) - 1) * np.deg2rad(3)
+
+    # Fonction de bruit sur la mesure
+    def my_output_noise_func(timestep, params, all_t, all_u, all_y, dt):
+        # Decommenter pour tester diverses fonctions de bruit
+
+        # Pas de bruit: commande parfaitement fidele
+        return 0
+
+        # Erreur uniformement distribuee entre -2.5cm et +2.5cm lors de la mesure
         # return (2 * np.random.random(1) - 1) * 0.025  # Erreur de +- 2.5cm a la mesure
 
-    # Fonction de perturbation, pour l'objectif 7 (unites SI et rad, pas en cm et deg comme dans les consignes)
+    # Fonction de perturbation, pour l'objectif 7
+    # Rappel: ici on travaille avec les unites SI (m et rad)
+    # Attention: le parametre s'appelle 'alpha' uniquement parce que c'etait demande dans les consignes. Il s'agit bien
+    # de l'angle du servo et non pas de la poutre. Pour etre coherent avec nos notations, il aurait fallu l'appeler
+    # theta.
     def my_perturbation(a_desired, x, v, alpha, t):
+        # Decommenter pour tester diverses perturbations
+
+        # Pas de perturbation
         return a_desired
+
+        # Perturbation d'une duree d'une seconde, au debut de la simulation
+        # if 0 <= t < 1:
+        #     return a_desired * 1.10
+        # else:
+        #     return a_desired
+
+    # Decommenter pour tester les differents simulateurs (complexite croissante)
+    # Celui utilise dans le projet est le 'BBThetaSimulator', sauf pour l'objectif 7 ou il s'agit du 'BBObj7Simulator'
 
     # sim = BBSimpleSimulator(dt=0.05, buffer_size=1000)
     # sim = BBAlphaSimulator(dt=0.05, buffer_size=1000)
     # sim = BBThetaSimulator(dt=0.05, buffer_size=1000)
     sim = BBObj7Simulator(my_perturbation, dt=0.05, buffer_size=1000)
 
+    # Decommenter pour choisir un etat initial [position, vitesse] (unites SI)
     my_init_state = np.array([0, 0])
     # my_init_state = np.array([0, -0.333])
     # my_init_state = np.array([1, 0])
 
+    # Lancement de la simulation
     sim.simulate(my_command_func, my_command_noise_func, my_output_noise_func, init_state=my_init_state)
+
+    # Creation d'un graphe pour afficher le resultat de la simulation
     fig, ((ax1), (ax2)) = plt.subplots(2, 1, sharex=True)
 
     ax1.plot(sim.all_t, sim.all_y, "k-", linewidth=2, label="Simulated position")
     ax1.plot(sim.all_t, np.full(sim.all_t.shape, -sim.params["l"] / 2), "r--", label="Position bounds")
     ax1.plot(sim.all_t, np.full(sim.all_t.shape, sim.params["l"] / 2), "r--")
 
-    ax2.plot(sim.all_t, np.rad2deg(sim.all_u), "k-", linewidth=2, label="Command")
+    # Afficher la commande ideale voulue, celle qui correspond a l'angle qu'aura le servo
+    ax2.plot(sim.all_t, np.rad2deg(sim.all_u - sim.params["theta_offset"]), "k-", linewidth=2, label="Command")
+
+    # Afficher la commande avec offset, permettant de compenser les imperfections du servo
+    # ax2.plot(sim.all_t, np.rad2deg(sim.all_u), "k-", linewidth=2, label="Command")
+
     ax2.plot(sim.all_t, np.full(sim.all_t.shape, -50), "r--", label="Command bounds")
     ax2.plot(sim.all_t, np.full(sim.all_t.shape, 50), "r--")
 
